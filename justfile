@@ -68,3 +68,13 @@ release version:
     git commit -m "Release $new"
     git tag "v$new"
     git push origin main "v$new"
+
+# Delete every GitHub release but the latest; the tags stay. Run after the new release is published.
+purge-releases:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    latest=$(gh release view --json tagName -q .tagName)
+    echo "keeping $latest"
+    gh release list --limit 1000 --json tagName -q '.[].tagName' |
+        { grep -vxF "$latest" || true; } |
+        xargs -r -n1 gh release delete --yes
