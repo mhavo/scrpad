@@ -1,23 +1,26 @@
 # One entry point: the git hook, CI and AGENTS.md all run `just check`.
 
-shell_scripts := "assets/app-icon/render.sh packaging/linux/install.sh packaging/macos/bundle.sh .githooks/pre-commit plugin/hooks/handoff-files.sh"
+shell_scripts := "assets/app-icon/render.sh web/build.sh packaging/linux/install.sh packaging/macos/bundle.sh .githooks/pre-commit plugin/hooks/handoff-files.sh"
 
 # Everything CI gates on: format, lint, dependency policy, workflows, tests.
-check: fmt-check lint deny workflows test
+check: fmt-check lint deny workflows test web-test
 
 # Fast subset for the pre-commit hook (under a few seconds; no build).
 pre-commit: fmt-check typos secrets-staged
 
 fmt:
     cargo fmt
+    cargo fmt --manifest-path web/crypto/Cargo.toml
     shfmt -w {{ shell_scripts }}
 
 fmt-check:
     cargo fmt --check
+    cargo fmt --check --manifest-path web/crypto/Cargo.toml
     shfmt -d {{ shell_scripts }}
 
 lint: typos
     cargo clippy --locked --all-targets --all-features -- -D warnings
+    cd web/crypto && cargo clippy --locked --release -- -D warnings
     shellcheck {{ shell_scripts }}
 
 typos:
@@ -34,6 +37,16 @@ workflows:
 
 test:
     cargo test --locked
+
+# The web app (web/): build it into web/dist, test its model and crypto module, serve it locally.
+web:
+    web/build.sh
+
+web-test: web
+    node --test web/test/
+
+web-serve port="8080": web
+    python3 -m http.server {{ port }} --bind 127.0.0.1 --directory web/dist
 
 # Secrets in the whole git history (CI) and in the staged changes (hook).
 secrets:

@@ -1,0 +1,15 @@
+{
+  "name": "scrpad",
+  "short_name": "scrpad",
+  "description": "A scratchpad with hidden and encrypted notes, kept in this browser",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#232528",
+  "theme_color": "#2a2c30",
+  "icons": [
+    { "src": "icons/app/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/app/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/app/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

@@ -20,6 +20,7 @@ A small, frameless, floating scratchpad for the things you need to jot down for 
 - Always on top, one key to show and hide (`scrpad --toggle`), Hyprland support
 - Dark and light theme, Inter or JetBrains Mono
 - The same notes in a terminal (`scrpad --tui`), over SSH or without a desktop
+- A web app for the phone (`web/`): an installable PWA with the same hiding and encryption, notes kept in the browser
 - Commands for scripts and agents: `scrpad -`, `--append`, `--read`, `--write`, `--run`, and a skill and hook for Claude Code and Codex
 - Linux, macOS and Windows; one executable, nothing to install
 
@@ -261,6 +262,24 @@ It is the same app, with the same file, saving, hiding, encryption, idle lock an
 | Save and quit | Ctrl+Q |
 
 The window's shortcuts lose their Shift here: most terminals can't tell Ctrl+Shift+L from Ctrl+L, and many send Ctrl+H as Backspace, so hiding is Alt+H. On macOS, Alt is Option, which Terminal and iTerm2 send as Meta only with *Use Option as Meta key* on; the menu (F10) has everything without it. tmux and screen may keep Ctrl+PgUp/PgDn for themselves; Alt+←/→ work there. Not in the terminal: pin, hiding the window, fonts, themes and Save to file. `scrpad --toggle` from elsewhere answers *ok* and does nothing, since a terminal can't be raised or hidden from outside; `--new` and `-` add their note as in the window.
+
+## Web app
+
+`web/` is scrpad for a phone: a page that installs to the home screen (a PWA) and then works offline. It is a separate app with its own notes, kept in the browser; it does not sync with the desktop app. The text is a plain `<textarea>`, so the phone's own keyboard, autocorrect, dictation, selection and paste work as anywhere else. Notes are picked from a dropdown, whose last entry adds a new one; the eye, the lock, copy and the `…` menu work as in the window, with rename, clear and delete (both with Undo), Save to file (an encrypted note as its encrypted message), font, size, theme, and the two stepping-away options. Leaving the app (another app, the home screen, the screen turned off) or 5 minutes without input count as stepping away.
+
+```
+just web          # build web/dist: the pages, the fonts and icons, and the crypto module
+just web-serve    # serve it at http://127.0.0.1:8080
+just web-test     # the notes model and the crypto module against tests/data
+```
+
+`web/dist` is plain static files: put it on any HTTPS host (GitHub Pages, say), open it on the phone and choose *Add to Home Screen* or *Install app*. A service worker keeps every file of the build, so it starts without a network; a new build is picked up on the next visit while online.
+
+- **Storage.** Notes live in the browser's IndexedDB for that site. The app asks the browser to keep them (`navigator.storage.persist()`); the `…` menu says whether it agreed. Stored data the app cannot read is kept aside in the same database, never saved over. A browser may still clear a site's data (Safari does after weeks without a visit unless the app is on the home screen), and clearing site data or uninstalling deletes the notes, so `…` → *Back up all notes* now and then. The backup is a `notes.json` in the desktop app's format: *Import notes…* adds the notes of such a file, the desktop app's own included, without replacing any. To move notes to the desktop app, put the backup in place of its `notes.json` while it is closed (that replaces what it had).
+- **Encryption** is the desktop app's: `src/crypto.rs` built into a 75 KB WebAssembly module (`web/crypto`), so a message encrypted on one opens in the other and in any SimpleTextCrypt tool. Argon2id runs in a Web Worker and may take a second or two on a phone; the worker is ended a minute after its last job to give back its 64 MiB. As in the window, an encrypted note is stored only as its cipher, edits are sealed a moment after typing stops, and a note is locked only after what was typed is sealed. A JavaScript string cannot be wiped, so a locked note's text stays in the page's memory until the browser reuses it.
+- **No network.** The page makes no requests but for its own files, and its Content-Security-Policy allows nothing else: no other site, no inline script. There is no telemetry and no update check.
+- **The host is trusted.** Whoever controls the site the app is served from controls its code, and a changed build could read what is typed into it. Serve it from a host you control, and use the desktop app for secrets that matter more than that.
+- **Not here:** the clipboard is not cleared after copying a secret (a page cannot read it back to check), there is no protection from screenshots and screen sharing, and scripts and agents (`--append`, `--read`, `--write`, `--run`) have nothing to talk to.
 
 ## Hiding and encryption
 

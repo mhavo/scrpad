@@ -2,3 +2,5 @@
 [toolchain]
 channel = "1.98.1"
 components = ["clippy", "rustfmt"]
+# The web app's crypto module (web/crypto).
+targets = ["wasm32-unknown-unknown"]

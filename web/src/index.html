@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
+    <!-- Only this site's own files, and no request with the notes: see README § Web app. -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; connect-src 'self'; style-src 'self'; font-src 'self'; img-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'"
+    />
+    <meta name="referrer" content="no-referrer" />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="theme-color" content="#2a2c30" />
+    <title>scrpad</title>
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="icons/app/icon-192.png" />
+    <link rel="apple-touch-icon" href="icons/app/apple-touch-icon.png" />
+    <link rel="stylesheet" href="style.css" />
+    <script type="module" src="app.js"></script>
+  </head>
+  <body>
+    <header class="bar">
+      <span class="select-wrap"><select id="note" aria-label="Note"></select></span>
+      <button id="eye" class="tool" aria-label="Hide note"><i class="icon" data-icon="eye"></i></button>
+      <button id="lock" class="tool" aria-label="Encrypt note"><i class="icon" data-icon="lock-open"></i></button>
+      <button id="copy" class="tool" aria-label="Copy note" title="Copy"><i class="icon" data-icon="copy"></i></button>
+      <button id="more" class="tool" aria-label="More" title="More"><i class="icon" data-icon="ellipsis"></i></button>
+    </header>
+
+    <main>
+      <textarea id="editor" placeholder="Write something…" spellcheck="true" autocapitalize="sentences" aria-label="Note text"></textarea>
+
+      <div id="masked" class="masked" role="button" tabindex="0" hidden aria-label="Hidden note: tap to reveal"></div>
+
+      <form id="unlock" class="center" hidden autocomplete="off">
+        <i class="icon big secure" data-icon="lock"></i>
+        <p>This note is encrypted.</p>
+        <input id="unlock-password" type="password" placeholder="Password" aria-label="Password" autocomplete="off" />
+        <button type="submit" class="primary">Unlock</button>
+        <p id="unlock-error" class="error" role="alert"></p>
+      </form>
+
+      <textarea id="cipher" readonly hidden aria-label="Encrypted text"></textarea>
+    </main>
+
+    <div id="status" role="status" hidden></div>
+    <div id="toast" role="status" hidden><span></span><button type="button"></button></div>
+
+    <dialog id="menu" class="sheet">
+      <form method="dialog">
+        <div class="group" id="menu-note">
+          <button value="rename">Rename note</button>
+          <button value="visible" data-when="hidden">Keep this note visible</button>
+          <button value="show-cipher" data-when="encrypted">Show encrypted text</button>
+          <button value="remove-encryption" data-when="unlocked">Remove encryption</button>
+          <button value="save">Save note to file</button>
+          <button value="clear">Clear note</button>
+          <button value="delete" class="danger">Delete note</button>
+        </div>
+        <div class="group">
+          <button value="lock-all">Lock all encrypted notes</button>
+          <label class="check"><input type="checkbox" id="auto-lock" /> Lock encrypted notes automatically</label>
+          <label class="check"><input type="checkbox" id="auto-rehide" /> Hide notes again automatically</label>
+        </div>
+        <div class="group row">
+          <span>Font</span>
+          <span class="segmented" role="group" aria-label="Font">
+            <button value="font-Sans" data-font="Sans">Inter</button>
+            <button value="font-Mono" data-font="Mono">Mono</button>
+          </span>
+          <span class="segmented" role="group" aria-label="Font size">
+            <button value="smaller" aria-label="Smaller">A−</button>
+            <button value="larger" aria-label="Larger">A+</button>
+          </span>
+        </div>
+        <div class="group row">
+          <span>Theme</span>
+          <span class="segmented" role="group" aria-label="Theme">
+            <button value="theme-System" data-theme-choice="System">Auto</button>
+            <button value="theme-Dark" data-theme-choice="Dark">Dark</button>
+            <button value="theme-Light" data-theme-choice="Light">Light</button>
+          </span>
+        </div>
+        <div class="group">
+          <button value="backup">Back up all notes (notes.json)</button>
+          <button value="import">Import notes…</button>
+        </div>
+        <p class="about">Notes stay in this browser. <span id="persisted"></span></p>
+      </form>
+    </dialog>
+
+    <dialog id="encrypt-dialog" class="modal">
+      <form method="dialog" autocomplete="off">
+        <h2>Encrypt note</h2>
+        <p class="muted">Use a long, unique password. A forgotten password cannot be recovered.</p>
+        <input id="pw1" type="password" placeholder="Password" aria-label="Password" autocomplete="new-password" />
+        <input id="pw2" type="password" placeholder="Password again" aria-label="Password again" autocomplete="new-password" />
+        <p id="encrypt-error" class="error" role="alert"></p>
+        <div class="actions">
+          <button type="button" data-close>Cancel</button>
+          <button value="ok" class="primary">Encrypt</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="rename-dialog" class="modal">
+      <form method="dialog" autocomplete="off">
+        <h2>Rename note</h2>
+        <input id="title" type="text" aria-label="Title" maxlength="200" />
+        <div class="actions">
+          <button type="button" data-close>Cancel</button>
+          <button value="ok" class="primary">Rename</button>
+        </div>
+      </form>
+    </dialog>
+
+    <input id="import-file" type="file" accept=".json,application/json" hidden />
+  </body>
+</html>

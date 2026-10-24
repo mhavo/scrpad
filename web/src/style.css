@@ -1,0 +1,453 @@
+/* The desktop app's design tokens (src/theme.rs), for a phone. */
+
+@font-face {
+  font-family: Inter;
+  src: url("fonts/Inter-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-display: block;
+}
+@font-face {
+  font-family: Inter;
+  src: url("fonts/Inter-SemiBold.ttf") format("truetype");
+  font-weight: 600;
+  font-display: block;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("fonts/JetBrainsMono-Regular.ttf") format("truetype");
+  font-display: block;
+}
+
+:root {
+  --bg-top: #2a2c30;
+  --bg-bottom: #232528;
+  --border: #484b50;
+  --divider: #383b40;
+  --title: #c8cace;
+  --text: #e6e7e9;
+  --muted: #b4b7bc;
+  --placeholder: #7a7e84;
+  --icon: #d4d6d9;
+  --icon-faint: #7c8086;
+  --hover: rgb(255 255 255 / 6%);
+  --accent: #2f8cff;
+  --secure: #3fc06a;
+  --error: #ff6b6b;
+  --selected: #2b3b52;
+  --popup: #313337;
+  --selection: rgb(47 140 255 / 40%);
+  --font-size: 16px;
+  --font: Inter, system-ui, sans-serif;
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  --bg-top: #fbfbfa;
+  --bg-bottom: #f1f1ef;
+  --border: #cfd0d2;
+  --divider: #e2e3e5;
+  --title: #4a4d52;
+  --text: #1f2124;
+  --muted: #55585e;
+  --placeholder: #9a9da2;
+  --icon: #3a3d42;
+  --icon-faint: #9a9da2;
+  --hover: rgb(0 0 0 / 6%);
+  --accent: #0a72f0;
+  --secure: #1a8a40;
+  --error: #d03030;
+  --selected: #dde8f8;
+  --popup: #ffffff;
+  --selection: rgb(10 114 240 / 25%);
+  color-scheme: light;
+}
+
+:root[data-font="Mono"] {
+  --font: "JetBrains Mono", ui-monospace, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(var(--bg-top), var(--bg-bottom)) fixed;
+  background-color: var(--bg-bottom);
+  color: var(--text);
+  font: 15px/1.4 Inter, system-ui, sans-serif;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+::selection {
+  background: var(--selection);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+.icon {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  background: currentColor;
+  -webkit-mask: var(--src) center / contain no-repeat;
+  mask: var(--src) center / contain no-repeat;
+}
+.icon.big {
+  width: 32px;
+  height: 32px;
+}
+
+/* The bar: the note dropdown and the tools, 44 px touch targets. */
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--divider);
+}
+
+#note {
+  flex: 1;
+  min-width: 0;
+  height: 40px;
+  padding: 0 32px 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--selected);
+  color: var(--title);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  appearance: none;
+}
+/* The chevron (Lucide chevron-down) in the title colour: the native one ignores the theme. */
+.select-wrap {
+  position: relative;
+  margin-right: 4px;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+}
+.select-wrap::after {
+  content: "";
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  margin-top: -8px;
+  pointer-events: none;
+  background: var(--title);
+  -webkit-mask: url("icons/chevron-down.svg") center / contain no-repeat;
+  mask: url("icons/chevron-down.svg") center / contain no-repeat;
+}
+
+.tool {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: var(--icon);
+}
+.tool:active {
+  background: var(--hover);
+}
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+#editor:focus-visible,
+#cipher:focus-visible {
+  outline: 0;
+}
+.tool.on {
+  color: var(--accent);
+}
+.tool.secure {
+  color: var(--secure);
+}
+
+main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  position: relative;
+}
+
+#editor,
+#cipher,
+.masked {
+  flex: 1;
+  width: 100%;
+  margin: 0;
+  padding: 14px 16px 24px;
+  border: 0;
+  outline: 0;
+  resize: none;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: var(--font-size);
+  line-height: 1.5;
+  caret-color: var(--accent);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+#editor::placeholder {
+  color: var(--placeholder);
+}
+#cipher {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 13px;
+  color: var(--secure);
+}
+
+.masked {
+  overflow: auto;
+  color: var(--muted);
+  letter-spacing: 1px;
+  cursor: pointer;
+}
+.masked[hidden],
+[hidden] {
+  display: none !important;
+}
+
+.center {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+  text-align: center;
+}
+.center p {
+  margin: 0;
+  color: var(--muted);
+}
+.secure {
+  color: var(--secure);
+}
+
+input[type="password"],
+input[type="text"] {
+  width: 100%;
+  max-width: 320px;
+  height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-bottom);
+  outline: 0;
+}
+input:focus {
+  border-color: var(--accent);
+}
+
+.primary,
+.actions button,
+.group > button {
+  min-height: 44px;
+  border-radius: 10px;
+}
+.primary {
+  padding: 0 20px;
+  border: 0;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+.error {
+  color: var(--error) !important;
+  min-height: 1.4em;
+}
+.muted {
+  color: var(--muted);
+}
+
+#status {
+  padding: 6px 16px;
+  font-size: 13px;
+  color: var(--muted);
+  border-top: 1px solid var(--divider);
+}
+#status.error {
+  color: var(--error);
+}
+
+#toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: calc(100% - 32px);
+  padding: 8px 8px 8px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--popup);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 30%);
+  font-size: 14px;
+}
+#toast button {
+  white-space: nowrap;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--accent);
+  font-weight: 600;
+}
+#toast button:empty {
+  display: none;
+}
+
+dialog {
+  border: 1px solid var(--border);
+  background: var(--popup);
+  color: var(--text);
+  padding: 0;
+}
+dialog::backdrop {
+  background: rgb(0 0 0 / 45%);
+}
+dialog form {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+}
+
+/* The … menu: a sheet from the bottom, where the thumb is. */
+.sheet {
+  width: 100%;
+  max-width: 560px;
+  max-height: 85dvh;
+  margin: auto auto 0;
+  border-radius: 16px 16px 0 0;
+  border-bottom: 0;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.group {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--divider);
+}
+.group > button,
+.check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  background: none;
+  text-align: left;
+}
+.group > button:active {
+  background: var(--hover);
+}
+.danger {
+  color: var(--error);
+}
+.check input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--accent);
+}
+.row {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+}
+.row > span:first-child {
+  flex: 1;
+}
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.segmented button {
+  min-width: 52px;
+  min-height: 40px;
+  padding: 0 10px;
+  border: 0;
+  background: none;
+}
+.segmented button + button {
+  border-left: 1px solid var(--border);
+}
+.segmented button.on {
+  background: var(--selected);
+  color: var(--accent);
+  font-weight: 600;
+}
+.about {
+  margin: 8px 12px 4px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.modal {
+  width: calc(100% - 32px);
+  max-width: 400px;
+  border-radius: 14px;
+}
+.modal form {
+  gap: 10px;
+  padding: 20px;
+}
+.modal input {
+  max-width: none;
+}
+.modal h2 {
+  margin: 0;
+  font-size: 17px;
+}
+.modal p {
+  margin: 0;
+}
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.actions button:not(.primary) {
+  padding: 0 16px;
+  border: 0;
+  background: none;
+  color: var(--accent);
+}

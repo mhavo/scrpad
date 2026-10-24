@@ -9,3 +9,5 @@ handoff.md
 *.log
 .DS_Store
 .claude/settings.local.json
+/web/dist
+/web/crypto/target

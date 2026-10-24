@@ -7,6 +7,8 @@
 #   scrpad-square.svg  the same drawing cropped close to the body, for Linux (hicolor scalable)
 #   scrpad-256.png     256 px of the square crop: the runtime icon on Windows and Linux
 #   scrpad.ico         the square crop at 16–256 px: the Windows .exe icon
+#   web/               the web app's icons (web/src/manifest.webmanifest): the square crop at
+#                      192 and 512 px, and a full-bleed variant for maskable and Apple icons
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -34,4 +36,13 @@ for size, png in zip(sizes, pngs):
     offset += len(png)
 open("scrpad.ico", "wb").write(out + b"".join(pngs))
 EOF
+
+# The phone draws its own shape around these: the body's background fills the whole canvas.
+mkdir -p web
+sed 's|<rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)"/>|<rect width="1024" height="1024" fill="url(#bg)"/>|; /<rect x="101.5" y="101.5"/d' \
+  scrpad.svg >"$tmp/full.svg"
+inkscape scrpad-square.svg -w 192 -h 192 -o web/icon-192.png 2>/dev/null
+inkscape scrpad-square.svg -w 512 -h 512 -o web/icon-512.png 2>/dev/null
+inkscape "$tmp/full.svg" -w 512 -h 512 -o web/maskable-512.png 2>/dev/null
+inkscape "$tmp/full.svg" -w 180 -h 180 -o web/apple-touch-icon.png 2>/dev/null
 rm -rf "$tmp"

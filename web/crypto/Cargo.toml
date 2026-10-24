@@ -1,0 +1,29 @@
+[package]
+name = "scrpad-crypto"
+version = "0.1.0"
+edition = "2024"
+description = "src/crypto.rs as a WebAssembly module for the scrpad web app"
+license = "MIT"
+publish = false
+
+# Not a member of the scrpad package: it only builds for wasm32 (`just web`).
+[workspace]
+
+[lib]
+crate-type = ["cdylib"]
+path = "src/lib.rs"
+
+# The same crates and versions as the app, so the module is the app's crypto.rs, bit for bit.
+[dependencies]
+aes-gcm = "0.11"
+argon2 = "0.6"
+base64 = "0.23"
+getrandom = "0.4"
+zeroize = "1"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

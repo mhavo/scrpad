@@ -8,6 +8,7 @@ design; read the section you need, not the whole file.
 - `just setup` — once: installs the tools pinned in `mise.toml` and the git hook.
 - `just check` — the gate. Run before every commit; CI runs the same command.
 - `just fmt` — rustfmt + shfmt. `just test` — unit and headless UI tests (images go to `shots/`).
+- `just web` / `just web-serve` / `just web-test` — build, serve and test the web app (README § Web app).
 
 Rust is pinned in `rust-toolchain.toml`. Never weaken a check to make it pass: fix the cause,
 or add one narrow suppression with the reason next to it.
@@ -31,6 +32,7 @@ or add one narrow suppression with the reason next to it.
 | `src/agents.rs` | `--install-agent`/`--uninstall-agent`: the skill and the Codex hook in the user's home, ownership by digest | anything that writes outside notes.json, agent setup |
 | `src/clipboard.rs` | clears a copied secret if the clipboard still holds it | clipboard work |
 | `src/tui/` | terminal frontend (`--tui`): keys and drawing, own editor, terminal loop | terminal UI work |
+| `web/` | phone web app (PWA): `src/` pages and model, `crypto/` builds `src/crypto.rs` to wasm, `test/` (node) | web app work, any change to `src/crypto.rs` |
 | `plugin/`, `.claude-plugin/` | Claude Code plugin: the skill (`scrpad --skill` prints it too) and the `.env` hook | agent instructions or the hook |
 | `INSTALL.md` | steps an AI agent follows to install a release and set itself up; README links to it on `main` | release, packaging or `--install-agent` changes |
 | `tests/ui.rs` | egui_kittest UI tests | any UI change |
@@ -40,7 +42,7 @@ or add one narrow suppression with the reason next to it.
 ## Invariants
 
 - An encrypted note reaches the disk only as its cipher, never as plaintext — not in
-  `notes.json`, not in exports, not in temp files. The one exception is `--write`, to the file
+  `notes.json`, not in exports, not in temp files, not in the web app's IndexedDB or backups. The one exception is `--write`, to the file
   the user allows in the dialog, each time (`src/handoff.rs`).
 - A failed save keeps the changes dirty and visible to the user; it never pretends to have saved.
 - An unreadable `notes.json` is moved aside, never overwritten.
