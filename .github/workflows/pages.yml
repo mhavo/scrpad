@@ -1,0 +1,51 @@
+name: Pages
+
+# Pushing a tag like v0.1.0 (`just release`) builds the web app (web/) and publishes it to GitHub
+# Pages, after its tests pass. Only tags: whoever controls the site controls the code that holds
+# the passwords, so a deploy is a release decision (README § Web app). Settings → Pages must have
+# the source "GitHub Actions", and the github-pages environment must allow v* tags.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Installs the toolchain pinned in rust-toolchain.toml, with its wasm32 target.
+      - run: rustup toolchain install
+      # just and node, pinned in mise.toml.
+      # No cache: a published build never starts from what another run left behind.
+      - uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8 # v5.1.2
+        with:
+          cache: false
+      - run: just web-test
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: web/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
