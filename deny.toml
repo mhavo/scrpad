@@ -12,7 +12,15 @@ targets = [
 [advisories]
 # Every RustSec advisory fails the check, unmaintained crates included. A suppression names
 # the advisory id and why it does not apply.
-ignore = []
+ignore = [
+    # zvariant, zvariant_derive and zbus_names were merged into zbus 6 and get no more releases
+    # (https://github.com/z-galaxy/zbus/issues/2043): a deprecation, no known vulnerability. They
+    # come only through eframe's accesskit (Linux screen reader support); drop these once
+    # accesskit moves to zbus 6.
+    { id = "RUSTSEC-2026-0370", reason = "zvariant: merged into zbus 6, pulled in by accesskit" },
+    { id = "RUSTSEC-2026-0371", reason = "zbus_names: merged into zbus 6, pulled in by accesskit" },
+    { id = "RUSTSEC-2026-0372", reason = "zvariant_derive: merged into zbus 6, pulled in by accesskit" },
+]
 
 [licenses]
 # Permissive licenses only; MPL-2.0 is file-level copyleft and fine for a statically linked app.
