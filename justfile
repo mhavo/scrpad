@@ -82,6 +82,14 @@ release version:
     git tag "v$new"
     git push origin main "v$new"
 
+# Publish the web app from origin/main to GitHub Pages, without a release of the binaries.
+web-release:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    git fetch --quiet origin main
+    echo "publishing origin/main $(git rev-parse --short origin/main) to Pages"
+    gh workflow run pages.yml --ref main
+
 # Delete every GitHub release but the latest; the tags stay. Run after the new release is published.
 purge-releases:
     #!/usr/bin/env bash
