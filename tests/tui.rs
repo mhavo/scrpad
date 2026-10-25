@@ -590,3 +590,80 @@ fn a_read_of_a_big_note_says_how_much_the_agent_gets() {
     s.press(KeyCode::Char('n'));
     assert!(matches!(job.join().unwrap(), scrpad::instance::Reply::Error(_)));
 }
+
+fn markdown_state() -> State {
+    let mut state = sample();
+    state.notes[1].text = "# Title\n\nSome **bold** and `code`.\n\n- one\n- two\n\n> quoted\n\n| a | b |\n|---|---|\n| 1 | 2 |".into();
+    state
+}
+
+#[test]
+fn alt_r_renders_the_markdown_and_back() {
+    let mut s = Screen::new(markdown_state(), None);
+    s.alt('r');
+    let screen = s.text();
+    assert!(screen.contains("Title") && !screen.contains("# Title"), "{screen}");
+    assert!(screen.contains("Some bold and code.") && !screen.contains("**"), "{screen}");
+    assert!(screen.contains("• one") && screen.contains("│ quoted"), "{screen}");
+    assert!(screen.contains("a │ b") && screen.contains("1 │ 2"), "{screen}");
+    // Typing does not edit a rendered note, and the text is untouched.
+    s.type_text("zzz");
+    assert!(s.current().text.starts_with("# Title"));
+    assert!(!s.current().text.contains("zzz"));
+    s.alt('r');
+    assert!(s.text().contains("# Title"));
+    s.type_text("Z");
+    assert!(s.current().text.contains('Z'));
+}
+
+#[test]
+fn the_rendered_view_scrolls_and_wraps_with_its_prefixes() {
+    let mut state = sample();
+    state.notes[1].text =
+        format!("> {}\n\n{}", "quote words ".repeat(12), (1..=30).map(|n| format!("- item {n}")).collect::<Vec<_>>().join("\n"));
+    let mut s = Screen::sized(state, None, 40, 12);
+    s.alt('r');
+    let before = s.text();
+    // Every wrapped line of the quote keeps its bar.
+    assert!(before.lines().filter(|l| l.contains("quote words")).all(|l| l.contains("│ ")), "{before}");
+    s.press(KeyCode::End);
+    let after = s.text();
+    assert!(after.contains("item 30") && !after.contains("item 1\n"), "{after}");
+    s.press(KeyCode::Home);
+    assert!(s.text().contains("quote words"));
+}
+
+#[test]
+fn a_hidden_note_is_never_rendered() {
+    let mut state = markdown_state();
+    state.notes[1].hidden = true;
+    let mut s = Screen::new(state, None);
+    s.alt('r');
+    let screen = s.text();
+    assert!(!screen.contains("Title") && !screen.contains("bold"), "{screen}");
+}
+
+#[test]
+fn the_menu_copies_without_markdown_and_as_html() {
+    let mut s = Screen::new(markdown_state(), None);
+    // The menu lists Rename, Close, Hide, Encrypt, Render Markdown, Copy all, then the two.
+    let pick = |s: &mut Screen, downs: usize| {
+        s.press(KeyCode::F(10));
+        for _ in 0..downs {
+            s.press(KeyCode::Down);
+        }
+        s.press(KeyCode::Enter);
+    };
+    let decode = |sequence: &str| {
+        use base64::Engine;
+        let b64 = sequence.trim_start_matches("\x1b]52;c;").trim_end_matches('\x07');
+        String::from_utf8(base64::engine::general_purpose::STANDARD.decode(b64).unwrap()).unwrap()
+    };
+    pick(&mut s, 6);
+    let plain = decode(&s.tui.take_clipboard().unwrap());
+    assert!(plain.starts_with("Title\n\nSome bold and code."), "{plain}");
+    assert!(s.text().contains("Copied as plain text"));
+    pick(&mut s, 7);
+    let html = decode(&s.tui.take_clipboard().unwrap());
+    assert!(html.contains("<h1>Title</h1>") && html.contains("<strong>bold</strong>"), "{html}");
+}

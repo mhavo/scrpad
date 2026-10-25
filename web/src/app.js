@@ -2,6 +2,7 @@
 // The model is notes.js; Argon2id runs in crypto-worker.js; storage.js keeps the notes.
 import * as N from "./notes.js";
 import * as storage from "./storage.js";
+import * as M from "./markdown.js";
 
 const $ = (id) => document.getElementById(id);
 const ui = {
@@ -9,6 +10,9 @@ const ui = {
   eye: $("eye"),
   lock: $("lock"),
   copy: $("copy"),
+  copyMore: $("copy-more"),
+  copyMenu: $("copy-menu"),
+  rendered: $("rendered"),
   more: $("more"),
   editor: $("editor"),
   masked: $("masked"),
@@ -37,6 +41,10 @@ const NEW_NOTE = "new";
 let state = N.defaultState();
 /** Per page view, not saved: the encrypted text is on screen instead of the editor. */
 let showCipher = false;
+/** Per page view, not saved: the ids of the notes shown formatted (Markdown) instead of as text. */
+const formatted = new Set();
+/** The Markdown module, once it has loaded (it is the crypto module's wasm, see markdown.js). */
+let md = null;
 
 // ---------------------------------------------------------------- the crypto worker
 
@@ -199,10 +207,15 @@ function render() {
   const masked = N.isMasked(note) && !locked && !cipherView;
   const editing = !locked && !masked && !cipherView;
 
-  ui.editor.hidden = !editing;
+  // A masked, locked or cipher view never gets here: only a note the editor would show.
+  const formattedView = editing && formatted.has(note.id) && md !== null;
+  ui.editor.hidden = !editing || formattedView;
   ui.editor.readOnly = Boolean(note.locking);
   if (editing && ui.editor.value !== note.text) ui.editor.value = note.text;
   if (!editing) ui.editor.value = "";
+  ui.rendered.hidden = !formattedView;
+  if (formattedView) showFormatted(note.text);
+  else ui.rendered.replaceChildren();
   ui.masked.hidden = !masked;
   ui.masked.textContent = masked ? N.mask(note.text) || "Hidden note" : "";
   ui.unlock.hidden = !locked || cipherView;
@@ -217,7 +230,7 @@ function render() {
   ui.lock.classList.toggle("secure", N.isEncrypted(note));
   ui.lock.setAttribute("aria-label", locked ? "Unlock note" : N.isEncrypted(note) ? "Lock note" : "Encrypt note");
   ui.lock.title = ui.lock.getAttribute("aria-label");
-  ui.copy.disabled = locked && !cipherView;
+  ui.copy.disabled = ui.copyMore.disabled = locked && !cipherView;
   updateStatus();
 }
 
@@ -361,12 +374,34 @@ function removeEncryption() {
   toast("Encryption removed: the note is saved as plain text");
 }
 
-async function copyNote() {
+/** The module's HTML is already safe; links open in a new tab and tell the site nothing. */
+function showFormatted(text) {
+  const doc = new DOMParser().parseFromString(md.html(text), "text/html");
+  for (const a of doc.querySelectorAll("a")) a.setAttribute("rel", "noopener noreferrer"), a.setAttribute("target", "_blank");
+  ui.rendered.replaceChildren(...doc.body.childNodes);
+}
+
+function toggleFormatted(note) {
+  if (md === null) return toast("Markdown is not available yet");
+  if (!formatted.delete(note.id)) formatted.add(note.id);
+  render();
+}
+
+async function copyNote(format = "as-is") {
   const note = current();
   const cipherView = showCipher && N.isEncrypted(note);
   if (N.isLocked(note) && !cipherView) return;
   try {
-    await navigator.clipboard.writeText(cipherView ? note.cipher : note.text);
+    if (cipherView || format === "as-is") {
+      await navigator.clipboard.writeText(cipherView ? note.cipher : note.text);
+    } else {
+      if (md === null) return toast("Markdown is not available yet");
+      const contents = M.copyContents(md, note.text, format);
+      if (contents.plain === "") return toast("Nothing to copy");
+      if (format === "html" && !(globalThis.ClipboardItem && navigator.clipboard.write)) return toast("This browser can't copy as HTML");
+      if (format === "html") await navigator.clipboard.write([M.clipboardItem(contents)]);
+      else await navigator.clipboard.writeText(contents.plain);
+    }
     const secret = (note.hidden || N.isEncrypted(note)) && !cipherView;
     toast(secret ? "Copied. Clear the clipboard yourself when done: a browser cannot." : "Copied");
   } catch {
@@ -473,9 +508,11 @@ function openMenu() {
     hidden: note.hidden,
     encrypted: N.isEncrypted(note),
     unlocked: N.isEncrypted(note) && !N.isLocked(note),
+    editable: !N.isLocked(note) && !N.isMasked(note) && !(showCipher && N.isEncrypted(note)),
   };
   for (const b of ui.menu.querySelectorAll("[data-when]")) b.hidden = !when[b.dataset.when];
   ui.menu.querySelector('[value="show-cipher"]').textContent = showCipher ? "Hide encrypted text" : "Show encrypted text";
+  ui.menu.querySelector('[value="render"]').textContent = formatted.has(note.id) ? "Edit as text" : "Show formatted";
   ui.menu.querySelector('[value="clear"]').disabled = N.isLocked(note);
   $("auto-lock").checked = state.auto_lock;
   $("auto-rehide").checked = state.auto_rehide;
@@ -517,6 +554,9 @@ function menuAction(value) {
       ui.title.value = note.title;
       ui.rename.showModal();
       ui.title.select();
+      break;
+    case "render":
+      toggleFormatted(note);
       break;
     case "visible":
       keepVisible(note);
@@ -567,6 +607,16 @@ async function stepAway() {
 
 // ---------------------------------------------------------------- start
 
+/** Loads in the background; the formatted view and the copies that need it wait for it. */
+async function loadMarkdown() {
+  try {
+    md = await M.loadMarkdown(await (await fetch("scrpad_crypto.wasm")).arrayBuffer());
+    render();
+  } catch {
+    // Without it the page is a plain editor with the plain copy.
+  }
+}
+
 async function start() {
   try {
     const stored = await storage.load();
@@ -581,11 +631,18 @@ async function start() {
   for (const i of document.querySelectorAll(".icon[data-icon]")) i.style.setProperty("--src", `url("icons/${i.dataset.icon}.svg")`);
   applyLook();
   render();
+  loadMarkdown();
 
   ui.note.onchange = () => (ui.note.value === NEW_NOTE ? addNote() : selectNote(Number(ui.note.value)));
   ui.eye.onclick = clickEye;
   ui.lock.onclick = clickLock;
-  ui.copy.onclick = copyNote;
+  ui.copy.onclick = () => copyNote();
+  ui.copyMore.onclick = () => {
+    ui.copyMenu.returnValue = "";
+    ui.copyMenu.showModal();
+  };
+  ui.copyMenu.addEventListener("click", (e) => e.target === ui.copyMenu && ui.copyMenu.close());
+  ui.copyMenu.addEventListener("close", () => M.COPY_FORMATS.includes(ui.copyMenu.returnValue) && copyNote(ui.copyMenu.returnValue));
   ui.more.onclick = openMenu;
   ui.masked.onclick = clickEye;
   ui.masked.onkeydown = (e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), clickEye());

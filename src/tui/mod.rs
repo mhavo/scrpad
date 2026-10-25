@@ -3,6 +3,7 @@
 //! real terminal. Tests drive `Tui` with synthetic events and ratatui's `TestBackend`.
 
 mod editor;
+mod render;
 mod term;
 
 use std::collections::{HashMap, HashSet};
@@ -19,6 +20,7 @@ use zeroize::Zeroizing;
 pub use term::run;
 
 use crate::crypto;
+use crate::markdown;
 use crate::session::{Eye, Session, ToastAction, lock};
 use crate::store::ReadMode;
 use editor::{Editor, Move};
@@ -38,6 +40,7 @@ pub const KEYS: &[(&str, &str)] = &[
     ("Ctrl+K", "Lock all encrypted notes"),
     ("Ctrl+E", "Show the encrypted text (Esc: back)"),
     ("Ctrl+Y", "Copy all (terminal clipboard)"),
+    ("Alt+R", "Show the note rendered as Markdown (and back)"),
     ("Ctrl+Z, Ctrl+R", "Undo, redo typing"),
     ("Alt+U", "Undo from the status line"),
     ("F10, Alt+M", "Menu: options and more"),
@@ -57,6 +60,14 @@ mod style {
     pub const SELECTED: Style = Style::new().add_modifier(Modifier::REVERSED.union(Modifier::BOLD));
 }
 
+/// What "Copy" puts on the clipboard.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum CopyAs {
+    AsIs,
+    Plain,
+    Html,
+}
+
 /// What a key or a menu item does.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Action {
@@ -73,6 +84,9 @@ enum Action {
     RemoveEncryption,
     Clear,
     Copy,
+    CopyPlain,
+    CopyHtml,
+    Render,
     UndoToast,
     Undo,
     Redo,
@@ -129,6 +143,8 @@ pub struct Tui {
     unsaved: HashSet<u64>,
     /// How far the encrypted text (Ctrl+E) is scrolled.
     cipher_scroll: u16,
+    /// The notes shown rendered as Markdown, and how far each is scrolled. Not saved.
+    rendered: HashMap<u64, u16>,
     /// An OSC 52 sequence that puts text on the terminal's clipboard, for the loop to write out.
     clipboard: Option<Zeroizing<String>>,
     /// Whether a key or a paste arrived since the last tick, for the idle timeout.
@@ -149,6 +165,7 @@ impl Tui {
             dismissed: None,
             unsaved: HashSet::new(),
             cipher_scroll: 0,
+            rendered: HashMap::new(),
             clipboard: None,
             input: false,
             shown_error: None,
@@ -320,7 +337,15 @@ impl Tui {
                 self.unsaved.insert(self.session.state.current().id);
                 self.session.clear(now);
             }
-            Action::Copy => self.copy(now),
+            Action::Copy => self.copy(now, CopyAs::AsIs),
+            Action::CopyPlain => self.copy(now, CopyAs::Plain),
+            Action::CopyHtml => self.copy(now, CopyAs::Html),
+            Action::Render => {
+                let id = self.session.state.current().id;
+                if self.rendered.remove(&id).is_none() {
+                    self.rendered.insert(id, 0);
+                }
+            }
             Action::KeepVisible => {
                 let id = self.session.state.current().id;
                 self.session.keep_visible(id, now);
@@ -393,8 +418,9 @@ impl Tui {
 
     /// Copies the note (or the encrypted text on show) through OSC 52, which works over SSH too.
     /// The terminal's clipboard can't be read back, so unlike the window's it is never cleared:
-    /// clearing it blindly could wipe what was copied since.
-    fn copy(&mut self, now: f64) {
+    /// clearing it blindly could wipe what was copied since. OSC 52 carries text only, so
+    /// "as HTML" puts the HTML source there.
+    fn copy(&mut self, now: f64, format: CopyAs) {
         if self.session.showing_cipher()
             && let Some(cipher) = &self.session.state.current().cipher
         {
@@ -403,13 +429,26 @@ impl Tui {
             return;
         }
         let note = self.session.state.current();
+        let text = Zeroizing::new(match format {
+            CopyAs::AsIs => note.text.clone(),
+            CopyAs::Plain => markdown::strip(&note.text),
+            CopyAs::Html => markdown::html(&note.text),
+        });
         let msg = if note.is_locked() {
             "Unlock the note first"
-        } else if note.text.is_empty() {
+        } else if text.is_empty() {
             "Nothing to copy"
         } else {
-            self.clipboard = Some(osc52(&note.text));
-            if note.hidden || note.is_encrypted() { "Copied; the terminal's clipboard won't be cleared" } else { "Copied to clipboard" }
+            self.clipboard = Some(osc52(&text));
+            if note.hidden || note.is_encrypted() {
+                "Copied; the terminal's clipboard won't be cleared"
+            } else {
+                match format {
+                    CopyAs::AsIs => "Copied to clipboard",
+                    CopyAs::Plain => "Copied as plain text",
+                    CopyAs::Html => "Copied the HTML source",
+                }
+            }
         };
         self.session.toast(now, msg, None);
     }
@@ -435,11 +474,26 @@ impl Tui {
             return;
         }
         let active = self.session.state.active;
+        let masked = self.session.is_masked(self.session.state.current());
         let note = &mut self.session.state.notes[active];
         if note.is_locked() {
             if key.code == KeyCode::Enter {
                 self.dismissed = None;
             }
+            return;
+        }
+        if let Some(scroll) = self.rendered.get_mut(&note.id).filter(|_| !masked) {
+            // The rendered view only scrolls; the text is edited from the editor.
+            let page = 10;
+            *scroll = match key.code {
+                KeyCode::Up => scroll.saturating_sub(1),
+                KeyCode::Down => scroll.saturating_add(1),
+                KeyCode::PageUp => scroll.saturating_sub(page),
+                KeyCode::PageDown => scroll.saturating_add(page),
+                KeyCode::Home => 0,
+                KeyCode::End => u16::MAX,
+                _ => *scroll,
+            };
             return;
         }
         let editor = self.editors.entry(note.id).or_insert_with(|| Editor::new(&note.text));
@@ -653,7 +707,10 @@ impl Tui {
         if s.state.notes.iter().any(crate::store::Note::is_encrypted) {
             items.push(MenuItem::new("Lock all", "Ctrl+K", Action::LockAll));
         }
+        items.push(MenuItem::new("Render Markdown", "Alt+R", Action::Render));
         items.push(MenuItem::new("Copy all", "Ctrl+Y", Action::Copy));
+        items.push(MenuItem::new("Copy without Markdown", "", Action::CopyPlain));
+        items.push(MenuItem::new("Copy as HTML", "", Action::CopyHtml));
         items.push(MenuItem::new("Clear note", "", Action::Clear));
         // On quitting and after 5 minutes without input.
         items.push(MenuItem::option("Lock encrypted notes automatically", Action::AutoLock, s.state.auto_lock));
@@ -807,8 +864,17 @@ impl Tui {
             frame.render_widget(Paragraph::new(lines).centered(), Rect { y, height: 2.min(area.height), ..area });
             return None;
         }
-        let editor = self.editors.entry(note.id).or_insert_with(|| Editor::new(&note.text));
         let masked = self.session.is_masked(note);
+        if !masked && let Some(scroll) = self.rendered.get_mut(&note.id) {
+            let lines = render::lines(&markdown::blocks(&note.text), usize::from(area.width));
+            *scroll = (*scroll).min((lines.len() as u16).saturating_sub(area.height));
+            if lines.is_empty() {
+                frame.render_widget(Line::styled("Nothing to show yet.", style::MUTED), Rect { height: 1, ..area });
+            }
+            frame.render_widget(Paragraph::new(lines).scroll((*scroll, 0)), area);
+            return None;
+        }
+        let editor = self.editors.entry(note.id).or_insert_with(|| Editor::new(&note.text));
         let at = editor.draw(&note.text, masked, area, frame.buffer_mut(), Style::new());
         if note.text.is_empty() {
             let hint = if masked { Line::styled("hidden", style::MUTED).right_aligned() } else { Line::styled(PLACEHOLDER, style::MUTED) };
@@ -1085,6 +1151,7 @@ fn binding(key: KeyEvent) -> Option<Action> {
             'h' => Action::Hide,
             'u' => Action::UndoToast,
             'm' => Action::Menu,
+            'r' => Action::Render,
             '9' => Action::Go(usize::MAX),
             d @ '1'..='8' => Action::Go(usize::from(d as u8 - b'1')),
             _ => return None,

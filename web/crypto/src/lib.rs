@@ -3,11 +3,19 @@
 //! JS writes the password and the text into buffers from `alloc`, calls `encrypt` or `decrypt`
 //! and reads the answer from `out_ptr`/`out_len`. The return value is 0 on success, else the
 //! error: 1 not an encrypted message, 2 wrong password or corrupted, 3 empty password.
+//!
+//! The same module also holds `src/markdown.rs`: `md_html` and `md_strip` take a note's text the
+//! same way and answer the HTML or the text without Markdown (0, or 1 for text that is not UTF-8).
 
 #![no_main]
 
 #[path = "../../../src/crypto.rs"]
 mod crypto;
+
+// The page uses only html and strip; the blocks are for the desktop window.
+#[allow(dead_code)]
+#[path = "../../../src/markdown.rs"]
+mod markdown;
 
 use std::cell::RefCell;
 
@@ -89,6 +97,36 @@ pub unsafe extern "C" fn decrypt(password: *const u8, password_len: usize, messa
     answer(crypto::decrypt(password, message))
 }
 
+/// The note's text as HTML (a fragment: raw HTML escaped, no images, only http(s) and mailto links).
+///
+/// # Safety
+/// `text` comes from `alloc` and holds `text_len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn md_html(text: *const u8, text_len: usize) -> u32 {
+    // SAFETY: see the function's contract.
+    let Some(text) = (unsafe { utf8(text, text_len) }) else { return 1 };
+    store(markdown::html(text))
+}
+
+/// The note's text without its Markdown.
+///
+/// # Safety
+/// `text` comes from `alloc` and holds `text_len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn md_strip(text: *const u8, text_len: usize) -> u32 {
+    // SAFETY: see the function's contract.
+    let Some(text) = (unsafe { utf8(text, text_len) }) else { return 1 };
+    store(markdown::strip(text))
+}
+
+fn store(text: String) -> u32 {
+    OUT.with_borrow_mut(|out| {
+        out.zeroize();
+        *out = text.into_bytes();
+    });
+    0
+}
+
 /// # Safety
 /// `ptr` holds `len` readable bytes that outlive the returned borrow.
 unsafe fn utf8<'a>(ptr: *const u8, len: usize) -> Option<&'a str> {
@@ -98,13 +136,7 @@ unsafe fn utf8<'a>(ptr: *const u8, len: usize) -> Option<&'a str> {
 
 fn answer(result: Result<String, crypto::Error>) -> u32 {
     match result {
-        Ok(text) => {
-            OUT.with_borrow_mut(|out| {
-                out.zeroize();
-                *out = text.into_bytes();
-            });
-            0
-        }
+        Ok(text) => store(text),
         Err(crypto::Error::InvalidFormat) => 1,
         Err(crypto::Error::DecryptFailed) => 2,
         Err(crypto::Error::EmptyPassword) => 3,

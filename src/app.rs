@@ -1050,14 +1050,19 @@ impl App {
         }
         x += 38.0;
         let copy = Rect::from_center_size(Pos2::new(x, y), size);
-        let resp =
-            icon_button(ui, copy, "files", 19.0, t.icon_faint, t, "Copy").on_hover_text("Copy all (Ctrl+Shift+C); right-click for more");
+        let resp = icon_button(ui, copy, "files", 19.0, t.icon_faint, t, "Copy").on_hover_text("Copy all (Ctrl+Shift+C)");
         if resp.clicked() {
             self.copy(ui.ctx(), now);
-        } else if resp.secondary_clicked() {
-            self.toggle_popup(Popup::Copy, copy);
+            self.popup = None;
         }
-        x += 38.0;
+        // The caret beside it opens the other ways to copy; right-clicking the button does too.
+        let caret = Rect::from_center_size(Pos2::new(x + 21.0, y), Vec2::new(16.0, 32.0));
+        let open = self.popup.is_some_and(|(p, _)| p == Popup::Copy);
+        let more = icon_button(ui, caret, "chevron-down", 14.0, if open { t.text } else { t.icon_faint }, t, "More ways to copy");
+        if more.on_hover_text("Copy without Markdown, as HTML").clicked() || resp.secondary_clicked() {
+            self.toggle_popup(Popup::Copy, copy.union(caret));
+        }
+        x += 52.0;
         let save = Rect::from_center_size(Pos2::new(x, y), size);
         if icon_button(ui, save, "download", 19.0, t.icon_faint, t, "Save to file").on_hover_text("Save to file… (Ctrl+S)").clicked() {
             self.export();

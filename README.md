@@ -69,7 +69,7 @@ On Linux, rendering goes through wgpu, so you need working Vulkan or OpenGL driv
 | Show the encrypted text (Esc to go back) | `…` → Show encrypted text | Ctrl+Shift+E |
 | Show the note rendered as Markdown (and back) | `…` → Render Markdown | Ctrl+Shift+M |
 | Copy all, as is | copy icon | Ctrl+Shift+C |
-| Copy without Markdown, or as HTML | right-click the copy icon | |
+| Copy without Markdown, or as HTML | caret beside the copy icon (or right-click it) | |
 | Save to file | download icon | Ctrl+S |
 | Clear (Undo from the toast) | trash icon | |
 | Font (Inter / JetBrains Mono, size) | `Aa` | |
@@ -86,7 +86,7 @@ On macOS, Ctrl means Cmd, except for Ctrl+Tab and Ctrl+Shift+Tab.
 
 ![A note rendered as Markdown](docs/markdown.png)
 
-The three copies work on the same parse. *Copy as is* puts the text on the clipboard as typed. *Copy without Markdown* puts the text without its markup (list markers stay, table cells are tab-separated, links keep their text only). *Copy as HTML* puts HTML on the clipboard with the plain text beside it, so a mail or a document keeps the formatting and a terminal gets the text. In that HTML, raw HTML in the note is escaped, images are their alt text and only `http`, `https` and `mailto` links stay links, so pasting a note never runs or fetches anything. A hidden or encrypted note copied in any of the three forms is cleared from the clipboard like any other secret copy (*Hiding and encryption* § Clipboard). The terminal and web apps do not render or convert Markdown yet.
+The three copies work on the same parse. *Copy as is* puts the text on the clipboard as typed. *Copy without Markdown* puts the text without its markup (list markers stay, table cells are tab-separated, links keep their text only). *Copy as HTML* puts HTML on the clipboard with the plain text beside it, so a mail or a document keeps the formatting and a terminal gets the text. In that HTML, raw HTML in the note is escaped, images are their alt text and only `http`, `https` and `mailto` links stay links, so pasting a note never runs or fetches anything. A hidden or encrypted note copied in any of the three forms is cleared from the clipboard like any other secret copy (*Hiding and encryption* § Clipboard). The terminal (§ Terminal) and the web app (§ Web app) do the same, with the differences noted there.
 
 From the command line (`scrpad --help`):
 
@@ -250,7 +250,7 @@ To give a program secrets, write the variable names to the scrpad note ".env" wi
  ^N new  M-h hide  ^L encrypt  ^Y copy  ^Q quit  F10 menu  F1 keys
 ```
 
-It is the same app, with the same file, saving, hiding, encryption, idle lock and script access; only one scrpad runs at a time, window or terminal. Long lines wrap at word boundaries, and each note has its own undo. `*` marks a note with changes not saved yet. Messages, and a save that failed, show on the bottom line.
+It is the same app, with the same file, saving, hiding, encryption, idle lock and script access; only one scrpad runs at a time, window or terminal. Long lines wrap at word boundaries, and each note has its own undo. Alt+R (or the menu) shows the open note rendered as Markdown, as in the window, and typing does nothing until you go back; a hidden note is never rendered. *Copy as HTML* puts the HTML source on the clipboard as text, since the terminal's clipboard (OSC 52) carries text only. `*` marks a note with changes not saved yet. Messages, and a save that failed, show on the bottom line.
 
 | Action | Keys |
 |---|---|
@@ -262,7 +262,9 @@ It is the same app, with the same file, saving, hiding, encryption, idle lock an
 | Encrypt / lock / unlock note | Ctrl+L |
 | Lock all encrypted notes | Ctrl+K |
 | Show the encrypted text (Esc to go back) | Ctrl+E |
+| Show the note rendered as Markdown (scroll with the arrows, PgUp/PgDn, Home/End; the same key goes back) | Alt+R |
 | Copy all | Ctrl+Y |
+| Copy without Markdown, Copy as HTML | F10 menu |
 | Undo / redo typing | Ctrl+Z / Ctrl+R |
 | Undo what the bottom line offers | Alt+U |
 | Menu: clear, remove encryption, the options of the `…` menu | F10 or Alt+M |
@@ -273,7 +275,7 @@ The window's shortcuts lose their Shift here: most terminals can't tell Ctrl+Shi
 
 ## Web app
 
-`web/` is scrpad for a phone: a page that installs to the home screen (a PWA) and then works offline. It is a separate app with its own notes, kept in the browser; it does not sync with the desktop app. The text is a plain `<textarea>`, so the phone's own keyboard, autocorrect, dictation, selection and paste work as anywhere else. Notes are picked from a dropdown, whose last entry adds a new one; the eye, the lock, copy and the `…` menu work as in the window, with rename, clear and delete (both with Undo), Save to file (an encrypted note as its encrypted message), font, size, theme, and the two stepping-away options. Leaving the app (another app, the home screen, the screen turned off) or 5 minutes without input count as stepping away.
+`web/` is scrpad for a phone: a page that installs to the home screen (a PWA) and then works offline. It is a separate app with its own notes, kept in the browser; it does not sync with the desktop app. The text is a plain `<textarea>`, so the phone's own keyboard, autocorrect, dictation, selection and paste work as anywhere else. Notes are picked from a dropdown, whose last entry adds a new one; the eye, the lock, copy and the `…` menu work as in the window (the caret beside copy opens *Copy as is*, *Copy without Markdown* and *Copy as HTML*, since a phone has no right-click, and `…` → *Show formatted* shows the note rendered as Markdown), with rename, clear and delete (both with Undo), Save to file (an encrypted note as its encrypted message), font, size, theme, and the two stepping-away options. Leaving the app (another app, the home screen, the screen turned off) or 5 minutes without input count as stepping away.
 
 ```
 just web          # build web/dist: the pages, the fonts and icons, and the crypto module
@@ -284,7 +286,8 @@ just web-test     # the notes model and the crypto module against tests/data
 `web/dist` is plain static files: put it on any HTTPS host (GitHub Pages, say), open it on the phone and choose *Add to Home Screen* or *Install app*. A service worker keeps every file of the build, so it starts without a network; a new build is picked up on the next visit while online. This repository publishes it at <https://mhavo.github.io/scrpad/> from each release tag (`just release`, `.github/workflows/pages.yml`), never from a plain push.
 
 - **Storage.** Notes live in the browser's IndexedDB for that site. The app asks the browser to keep them (`navigator.storage.persist()`); the `…` menu says whether it agreed. Stored data the app cannot read is kept aside in the same database, never saved over. A browser may still clear a site's data (Safari does after weeks without a visit unless the app is on the home screen), and clearing site data or uninstalling deletes the notes, so `…` → *Back up all notes* now and then. The backup is a `notes.json` in the desktop app's format: *Import notes…* adds the notes of such a file, the desktop app's own included, without replacing any. To move notes to the desktop app, put the backup in place of its `notes.json` while it is closed (that replaces what it had).
-- **Encryption** is the desktop app's: `src/crypto.rs` built into a 75 KB WebAssembly module (`web/crypto`), so a message encrypted on one opens in the other and in any SimpleTextCrypt tool. Argon2id runs in a Web Worker and may take a second or two on a phone; the worker is ended a minute after its last job to give back its 64 MiB. As in the window, an encrypted note is stored only as its cipher, edits are sealed a moment after typing stops, and a note is locked only after what was typed is sealed. A JavaScript string cannot be wiped, so a locked note's text stays in the page's memory until the browser reuses it.
+- **Markdown** is the desktop app's too: `src/markdown.rs` is built into the same WebAssembly module, so the formatted view and the three copies come out exactly as in the window. *Show formatted* is a view of the open note, per page visit and never saved; a hidden note that is masked and a locked note are never shown formatted. Links in it open in a new tab when you tap them. *Copy as HTML* puts HTML and the plain text on the clipboard (`navigator.clipboard.write`); a browser without that says so instead.
+- **Encryption** is the desktop app's: `src/crypto.rs` built into a WebAssembly module (`web/crypto`, about 360 KB with the Markdown parser), so a message encrypted on one opens in the other and in any SimpleTextCrypt tool. Argon2id runs in a Web Worker and may take a second or two on a phone; the worker is ended a minute after its last job to give back its 64 MiB. As in the window, an encrypted note is stored only as its cipher, edits are sealed a moment after typing stops, and a note is locked only after what was typed is sealed. A JavaScript string cannot be wiped, so a locked note's text stays in the page's memory until the browser reuses it.
 - **No network.** The page makes no requests but for its own files, and its Content-Security-Policy allows nothing else: no other site, no inline script. There is no telemetry and no update check.
 - **The host is trusted.** Whoever controls the site the app is served from controls its code, and a changed build could read what is typed into it. Serve it from a host you control, and use the desktop app for secrets that matter more than that.
 - **Not here:** the clipboard is not cleared after copying a secret (a page cannot read it back to check), there is no protection from screenshots and screen sharing, and scripts and agents (`--append`, `--read`, `--write`, `--run`) have nothing to talk to.

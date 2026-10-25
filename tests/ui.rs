@@ -1099,8 +1099,9 @@ fn the_menu_copies_as_html_with_the_text_beside_it() {
         *sink.lock().unwrap() = Some((html.to_owned(), plain.to_owned()));
         true
     });
-    h.get_by_label("Copy").click_secondary();
+    h.get_by_label("More ways to copy").click();
     h.run_steps(2);
+    shot(&mut h, "copy-menu");
     h.get_by_label("Copy as HTML").click();
     h.run_steps(2);
     h.get_by_label("Copied as HTML");
@@ -1108,7 +1109,7 @@ fn the_menu_copies_as_html_with_the_text_beside_it() {
     assert!(html.contains("<h1>Release 0.6</h1>") && html.contains("<strong>rendered</strong>"), "{html}");
     assert!(plain.starts_with("Release 0.6\n\nThe rendered view"), "{plain}");
 
-    h.get_by_label("Copy").click_secondary();
+    h.get_by_label("More ways to copy").click();
     h.run_steps(2);
     h.get_by_label("Copy without Markdown").click();
     h.run_steps(2);
@@ -1134,7 +1135,7 @@ fn a_secret_copied_as_html_is_cleared_like_any_other_copy() {
         *sink.0.lock().unwrap() = Some(plain.to_owned());
         true
     });
-    h.get_by_label("Copy").click_secondary();
+    h.get_by_label("More ways to copy").click();
     h.run_steps(2);
     h.get_by_label("Copy as HTML").click();
     h.run_steps(2);
