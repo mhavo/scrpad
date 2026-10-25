@@ -11,6 +11,8 @@ pub mod hyprland;
 pub mod icons;
 pub mod instance;
 pub mod launch;
+pub mod markdown;
+mod preview;
 pub mod scan;
 pub mod scripts;
 pub mod session;

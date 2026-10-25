@@ -173,6 +173,22 @@ button {
   background: none;
   color: var(--icon);
 }
+/* Copy and the caret that opens the other ways to copy: one button, two halves. */
+.split {
+  flex: none;
+  display: flex;
+}
+.tool.caret {
+  width: 24px;
+  margin-left: -6px;
+}
+.tool.caret .icon {
+  width: 16px;
+  height: 16px;
+}
+.tool:disabled {
+  opacity: 0.4;
+}
 .tool:active {
   background: var(--hover);
 }
@@ -224,6 +240,100 @@ main {
   font-family: "JetBrains Mono", ui-monospace, monospace;
   font-size: 13px;
   color: var(--secure);
+}
+
+/* The formatted view: the module's HTML in the note's font and colours. */
+.rendered {
+  flex: 1;
+  min-width: 0;
+  padding: 14px 16px 24px;
+  overflow: auto;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: var(--font-size);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.rendered > :first-child {
+  margin-top: 0;
+}
+.rendered h1,
+.rendered h2,
+.rendered h3,
+.rendered h4,
+.rendered h5,
+.rendered h6 {
+  margin: 0.8em 0 0.3em;
+  line-height: 1.25;
+}
+.rendered h1 {
+  font-size: 1.6em;
+}
+.rendered h2 {
+  font-size: 1.35em;
+}
+.rendered h3 {
+  font-size: 1.2em;
+}
+.rendered h4 {
+  font-size: 1.1em;
+}
+.rendered p,
+.rendered ul,
+.rendered ol,
+.rendered blockquote,
+.rendered pre,
+.rendered table {
+  margin: 0 0 0.6em;
+}
+.rendered ul,
+.rendered ol {
+  padding-left: 1.4em;
+}
+.rendered li > p {
+  margin: 0;
+}
+.rendered blockquote {
+  padding-left: 12px;
+  border-left: 2px solid var(--border);
+}
+.rendered code,
+.rendered pre {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.9em;
+  background: var(--divider);
+  border-radius: 4px;
+}
+.rendered code {
+  padding: 1px 4px;
+}
+.rendered pre {
+  padding: 8px 10px;
+  overflow: auto;
+  white-space: pre;
+  border-radius: 6px;
+}
+.rendered pre code {
+  padding: 0;
+  background: none;
+}
+.rendered a {
+  color: var(--accent);
+}
+.rendered hr {
+  border: 0;
+  border-top: 1px solid var(--divider);
+}
+.rendered table {
+  border-collapse: collapse;
+}
+.rendered th,
+.rendered td {
+  padding: 2px 12px 2px 0;
+  text-align: left;
+}
+.rendered th {
+  font-weight: 600;
 }
 
 .masked {

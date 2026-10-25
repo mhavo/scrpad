@@ -22,6 +22,7 @@ static SOURCES: &[(&str, &str)] = icons![
     "eye",
     "eye-off",
     "files",
+    "chevron-down",
     "download",
     "trash-2",
     "copy",

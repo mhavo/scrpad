@@ -1051,3 +1051,100 @@ fn a_tab_with_findings_shows_a_marker() {
     drop(h);
     let _ = std::fs::remove_dir_all(dir);
 }
+
+const MARKDOWN: &str = "# Release 0.6\n\nThe **rendered** view, with *emphasis*, `code` and a [link](https://example.com).\n\n- [x] write it\n- [ ] ship it\n  - nested\n\n1. first\n2. second\n\n> quoted\n\n```\ncargo test\n```\n\n| name | state |\n|---|---|\n| web | later |";
+
+fn markdown_note() -> State {
+    let mut state = sample();
+    state.notes[1].text = MARKDOWN.into();
+    state
+}
+
+#[test]
+fn ctrl_shift_m_renders_the_markdown_and_back() {
+    let _guard = ui_test_guard();
+    let mut h = harness_sized(markdown_note(), None, egui::vec2(420.0, 520.0));
+    h.get_by_role(egui::accesskit::Role::MultilineTextInput);
+    h.key_press_modifiers(egui::Modifiers::COMMAND | egui::Modifiers::SHIFT, egui::Key::M);
+    h.run_steps(3);
+    assert!(h.query_by_role(egui::accesskit::Role::MultilineTextInput).is_none(), "the editor is replaced by the rendered view");
+    h.get_by_label_contains("Release 0.6");
+    shot(&mut h, "markdown");
+    // The text itself is untouched, and the shortcut brings the editor back.
+    assert_eq!(h.state().session.state.notes[1].text, MARKDOWN);
+    h.key_press_modifiers(egui::Modifiers::COMMAND | egui::Modifiers::SHIFT, egui::Key::M);
+    h.run_steps(3);
+    h.get_by_role(egui::accesskit::Role::MultilineTextInput);
+}
+
+#[test]
+fn a_masked_note_is_never_rendered() {
+    let _guard = ui_test_guard();
+    let mut state = markdown_note();
+    state.notes[1].hidden = true;
+    let mut h = harness(state);
+    h.key_press_modifiers(egui::Modifiers::COMMAND | egui::Modifiers::SHIFT, egui::Key::M);
+    h.run_steps(3);
+    assert!(h.query_by_label_contains("Release 0.6").is_none());
+    h.get_by_role(egui::accesskit::Role::MultilineTextInput);
+}
+
+#[test]
+fn the_menu_copies_as_html_with_the_text_beside_it() {
+    let _guard = ui_test_guard();
+    let mut h = harness(markdown_note());
+    let seen = std::sync::Arc::new(Mutex::new(None));
+    let sink = seen.clone();
+    h.state_mut().write_html = Box::new(move |html, plain| {
+        *sink.lock().unwrap() = Some((html.to_owned(), plain.to_owned()));
+        true
+    });
+    h.get_by_label("More ways to copy").click();
+    h.run_steps(2);
+    shot(&mut h, "copy-menu");
+    h.get_by_label("Copy as HTML").click();
+    h.run_steps(2);
+    h.get_by_label("Copied as HTML");
+    let (html, plain) = seen.lock().unwrap().clone().unwrap();
+    assert!(html.contains("<h1>Release 0.6</h1>") && html.contains("<strong>rendered</strong>"), "{html}");
+    assert!(plain.starts_with("Release 0.6\n\nThe rendered view"), "{plain}");
+
+    h.get_by_label("More ways to copy").click();
+    h.run_steps(2);
+    h.get_by_label("Copy without Markdown").click();
+    h.run_steps(2);
+    h.get_by_label("Copied as plain text");
+}
+
+#[test]
+fn a_secret_copied_as_html_is_cleared_like_any_other_copy() {
+    let _guard = ui_test_guard();
+    let mut state = markdown_note();
+    state.notes[1].text = "**sk-live-SECRET**".into();
+    state.notes[1].hidden = true;
+    let mut h = harness(state);
+    let fake = FakeClipboard::default();
+    let open = {
+        let fake = fake.clone();
+        std::sync::Arc::new(move || Some(Box::new(fake.clone()) as Box<dyn scrpad::clipboard::Clipboard>))
+    };
+    h.state_mut().clipboard = scrpad::clipboard::Watch::new(open, std::time::Duration::from_millis(100));
+    let sink = fake.clone();
+    // The text form is what a reader of the clipboard sees, and what the watch compares.
+    h.state_mut().write_html = Box::new(move |_, plain| {
+        *sink.0.lock().unwrap() = Some(plain.to_owned());
+        true
+    });
+    h.get_by_label("More ways to copy").click();
+    h.run_steps(2);
+    h.get_by_label("Copy as HTML").click();
+    h.run_steps(2);
+    h.get_by_label("Copied, clipboard clears in 30 s");
+    for _ in 0..100 {
+        if fake.0.lock().unwrap().as_deref() == Some("") {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    assert_eq!(fake.0.lock().unwrap().as_deref(), Some(""));
+}

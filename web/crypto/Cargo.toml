@@ -20,6 +20,8 @@ argon2 = "0.6"
 base64 = "0.23"
 getrandom = "0.4"
 zeroize = "1"
+# src/markdown.rs, for the formatted view and the HTML copy: the app's own parse, so both agree.
+pulldown-cmark = { version = "0.13", default-features = false, features = ["html"] }
 
 [profile.release]
 opt-level = 3

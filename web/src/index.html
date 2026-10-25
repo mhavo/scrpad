@@ -23,12 +23,17 @@
       <span class="select-wrap"><select id="note" aria-label="Note"></select></span>
       <button id="eye" class="tool" aria-label="Hide note"><i class="icon" data-icon="eye"></i></button>
       <button id="lock" class="tool" aria-label="Encrypt note"><i class="icon" data-icon="lock-open"></i></button>
-      <button id="copy" class="tool" aria-label="Copy note" title="Copy"><i class="icon" data-icon="copy"></i></button>
+      <span class="split">
+        <button id="copy" class="tool" aria-label="Copy note" title="Copy"><i class="icon" data-icon="copy"></i></button>
+        <button id="copy-more" class="tool caret" aria-label="More ways to copy" title="Copy without Markdown, as HTML"><i class="icon" data-icon="chevron-down"></i></button>
+      </span>
       <button id="more" class="tool" aria-label="More" title="More"><i class="icon" data-icon="ellipsis"></i></button>
     </header>
 
     <main>
       <textarea id="editor" placeholder="Write something…" spellcheck="true" autocapitalize="sentences" aria-label="Note text"></textarea>
+
+      <div id="rendered" class="rendered" hidden aria-label="Note, formatted"></div>
 
       <div id="masked" class="masked" role="button" tabindex="0" hidden aria-label="Hidden note: tap to reveal"></div>
 
@@ -46,10 +51,21 @@
     <div id="status" role="status" hidden></div>
     <div id="toast" role="status" hidden><span></span><button type="button"></button></div>
 
+    <dialog id="copy-menu" class="sheet">
+      <form method="dialog">
+        <div class="group">
+          <button value="as-is">Copy as is</button>
+          <button value="plain">Copy without Markdown</button>
+          <button value="html">Copy as HTML</button>
+        </div>
+      </form>
+    </dialog>
+
     <dialog id="menu" class="sheet">
       <form method="dialog">
         <div class="group" id="menu-note">
           <button value="rename">Rename note</button>
+          <button value="render" data-when="editable">Show formatted</button>
           <button value="visible" data-when="hidden">Keep this note visible</button>
           <button value="show-cipher" data-when="encrypted">Show encrypted text</button>
           <button value="remove-encryption" data-when="unlocked">Remove encryption</button>

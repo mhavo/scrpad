@@ -112,6 +112,28 @@ fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
+/// Puts HTML and its plain text on the clipboard; `set_html` is the real one.
+pub type WriteHtml = dyn FnMut(&str, &str) -> bool;
+
+/// Puts `html` on the clipboard with `plain` as its text form, so a mail or a document takes the
+/// formatting and a terminal takes the text. False where that can't be done. A secret put here
+/// is cleared like any other: the watch compares the text form.
+pub fn set_html(html: &str, plain: &str) -> bool {
+    // Without a charset some targets read the fragment as Latin-1.
+    let html = format!("<meta charset=\"utf-8\">{html}");
+    #[cfg(target_os = "linux")]
+    if std::env::var_os("WAYLAND_DISPLAY").is_some() {
+        return wayland::set_html(&html, plain);
+    }
+    // One clipboard for the whole run: on X11 it serves the data for as long as it lives.
+    static SYSTEM: Mutex<Option<arboard::Clipboard>> = Mutex::new(None);
+    let mut system = lock(&SYSTEM);
+    if system.is_none() {
+        *system = arboard::Clipboard::new().ok();
+    }
+    system.as_mut().is_some_and(|clipboard| clipboard.set_html(html.as_str(), Some(plain)).is_ok())
+}
+
 fn system() -> Option<Box<dyn Clipboard>> {
     #[cfg(target_os = "linux")]
     if std::env::var_os("WAYLAND_DISPLAY").is_some() {
@@ -149,6 +171,24 @@ mod wayland {
         pub fn open() -> Option<Self> {
             utils::is_primary_selection_supported().ok().map(|_| DataControl)
         }
+    }
+
+    /// Offers both forms until something else is copied. The compositor asks the owner for the
+    /// data at paste time, so a thread serves it (forking, the library's default, is not safe in
+    /// a program with threads).
+    pub fn set_html(html: &str, plain: &str) -> bool {
+        if DataControl::open().is_none() {
+            return false;
+        }
+        let source =
+            |text: &str, mime: copy::MimeType| copy::MimeSource { source: copy::Source::Bytes(text.as_bytes().into()), mime_type: mime };
+        let sources = vec![source(html, copy::MimeType::Specific("text/html".into())), source(plain, copy::MimeType::Text)];
+        std::thread::spawn(move || {
+            let mut options = copy::Options::new();
+            options.foreground(true);
+            let _ = options.copy_multi(sources);
+        });
+        true
     }
 
     impl super::Clipboard for DataControl {

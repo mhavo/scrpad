@@ -52,6 +52,9 @@ unicode-segmentation = "1"
 # Already in the tree through url/idna, so they add no crates.
 icu_normalizer = { version = "2", default-features = false, features = ["compiled_data"] }
 icu_properties = { version = "2", default-features = false, features = ["compiled_data"] }
+# Markdown in notes (src/markdown.rs): one parse for the rendered view, the plain-text copy and
+# the HTML copy. Only the HTML writer, so no command-line parser comes along.
+pulldown-cmark = { version = "0.13", default-features = false, features = ["html"] }
 
 # Only Windows builds embed the .exe icon (build.rs).
 [target.'cfg(windows)'.build-dependencies]
