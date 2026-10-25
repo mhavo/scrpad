@@ -67,7 +67,9 @@ On Linux, rendering goes through wgpu, so you need working Vulkan or OpenGL driv
 | Lock and hide again when stepping away (both on by default, below) | `…` → Lock encrypted notes automatically, Hide notes again automatically | |
 | Let scripts and agents read notes: off, ask each time, or always (off by default, below) | `…` → Let scripts read notes | |
 | Show the encrypted text (Esc to go back) | `…` → Show encrypted text | Ctrl+Shift+E |
-| Copy all | copy icon | Ctrl+Shift+C |
+| Show the note rendered as Markdown (and back) | `…` → Render Markdown | Ctrl+Shift+M |
+| Copy all, as is | copy icon | Ctrl+Shift+C |
+| Copy without Markdown, or as HTML | right-click the copy icon | |
 | Save to file | download icon | Ctrl+S |
 | Clear (Undo from the toast) | trash icon | |
 | Font (Inter / JetBrains Mono, size) | `Aa` | |
@@ -79,6 +81,12 @@ On Linux, rendering goes through wgpu, so you need working Vulkan or OpenGL driv
 | Move / resize window | drag the title bar / the edges | |
 
 On macOS, Ctrl means Cmd, except for Ctrl+Tab and Ctrl+Shift+Tab.
+
+**Markdown.** Notes stay plain text; `…` → *Render Markdown* (Ctrl+Shift+M) shows the open note formatted instead of the editor, and the same key brings the editor back. Headings, bold, italic, strikethrough, code, lists (also task lists), quotes, rules and tables are drawn; the text can be selected and copied. It is a view, not a mode of the note: nothing is saved about it, a note opens as text, and a hidden note that is not revealed is never rendered. Line breaks stay line breaks, as in a chat. Links are shown as links but not opened, and images show their alt text.
+
+![A note rendered as Markdown](docs/markdown.png)
+
+The three copies work on the same parse. *Copy as is* puts the text on the clipboard as typed. *Copy without Markdown* puts the text without its markup (list markers stay, table cells are tab-separated, links keep their text only). *Copy as HTML* puts HTML on the clipboard with the plain text beside it, so a mail or a document keeps the formatting and a terminal gets the text. In that HTML, raw HTML in the note is escaped, images are their alt text and only `http`, `https` and `mailto` links stay links, so pasting a note never runs or fetches anything. A hidden or encrypted note copied in any of the three forms is cleared from the clipboard like any other secret copy (*Hiding and encryption* § Clipboard). The terminal and web apps do not render or convert Markdown yet.
 
 From the command line (`scrpad --help`):
 
@@ -376,7 +384,7 @@ cargo test            # just the unit tests + headless UI tests, images go to sh
 
 Rust is pinned in `rust-toolchain.toml`; the other tools (just, cargo-deny, typos, shfmt, shellcheck, actionlint, zizmor, gitleaks, jq) in `mise.toml`. The pre-commit hook runs the fast subset (`just pre-commit`: formatting, typos, gitleaks on the staged changes).
 
-The README images in `docs/` are copies of `shots/hero.png` (as `screenshot.png`), `light.png`, `encrypt-popup.png` (as `encrypt.png`), `locked.png`, `approval.png`, `approval-run.png`, `approval-read.png` and `script-append.png`. Refresh them after visual changes.
+The README images in `docs/` are copies of `shots/hero.png` (as `screenshot.png`), `light.png`, `markdown.png`, `encrypt-popup.png` (as `encrypt.png`), `locked.png`, `approval.png`, `approval-run.png`, `approval-read.png` and `script-append.png`. Refresh them after visual changes.
 
 `tests/plugin.rs` checks the Claude Code plugin: its manifests, the skill's front matter, and the hook run on sample tool calls (with jq, pinned in `mise.toml`). `claude plugin validate .` checks the marketplace and the plugin as Claude Code reads them.
 

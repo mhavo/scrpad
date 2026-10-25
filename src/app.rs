@@ -10,6 +10,8 @@ use crate::clipboard;
 use crate::crypto;
 use crate::icons;
 use crate::instance::Reply;
+use crate::markdown;
+use crate::preview;
 use crate::session::{Eye, Session, ToastAction, lock};
 use crate::store::{FontStyle, Note, ReadMode, State};
 use crate::theme::{self, ThemeKind, Tokens};
@@ -21,9 +23,21 @@ const TABS_H: f32 = 36.0;
 const FOOTER_H: f32 = 42.0;
 const RESIZE_EDGE: f32 = 6.0;
 
+/// What "Copy" puts on the clipboard.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum CopyAs {
+    /// The note's text, Markdown and all.
+    AsIs,
+    /// The text without its Markdown.
+    Plain,
+    /// HTML, with the plain text beside it.
+    Html,
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Popup {
     Font,
+    Copy,
     More,
     Encrypt,
 }
@@ -80,6 +94,10 @@ pub struct App {
     wm: Option<WmSync>,
     /// Takes a copied hidden or encrypted note off the clipboard again.
     pub clipboard: clipboard::Watch,
+    /// Puts HTML and its plain text on the clipboard; tests swap it for one in memory.
+    pub write_html: Box<clipboard::WriteHtml>,
+    /// The notes shown rendered (Markdown) instead of as text. Not saved: a note opens as text.
+    rendered: std::collections::HashSet<u64>,
 }
 
 impl App {
@@ -207,6 +225,8 @@ impl App {
             #[cfg(target_os = "linux")]
             wm: None,
             clipboard: clipboard::Watch::system(),
+            write_html: Box::new(clipboard::set_html),
+            rendered: Default::default(),
         }
     }
 
@@ -325,6 +345,10 @@ impl App {
     }
 
     pub fn copy(&mut self, ctx: &egui::Context, now: f64) {
+        self.copy_as(ctx, now, CopyAs::AsIs);
+    }
+
+    pub fn copy_as(&mut self, ctx: &egui::Context, now: f64, format: CopyAs) {
         if self.session.showing_cipher()
             && let Some(cipher) = self.session.state.current().cipher.clone()
         {
@@ -338,21 +362,51 @@ impl App {
             return;
         }
         let note = self.session.state.current();
-        if note.text.is_empty() {
+        let secret = note.hidden || note.is_encrypted();
+        let source = note.text.clone();
+        let text = match format {
+            CopyAs::AsIs => source.clone(),
+            CopyAs::Plain | CopyAs::Html => markdown::strip(&source),
+        };
+        if text.is_empty() {
             self.session.toast(now, "Nothing to copy", None);
             return;
         }
-        let secret = note.hidden || note.is_encrypted();
-        ctx.copy_text(note.text.clone());
+        let copied = match format {
+            CopyAs::Html => (self.write_html)(&markdown::html(&source), &text),
+            CopyAs::AsIs | CopyAs::Plain => {
+                ctx.copy_text(text.clone());
+                true
+            }
+        };
+        if !copied {
+            self.clipboard.other_copied();
+            self.session.toast(now, "Can't copy as HTML here", None);
+            return;
+        }
         let msg = if !secret {
             self.clipboard.other_copied();
-            "Copied to clipboard".to_owned()
-        } else if self.clipboard.secret_copied(&self.session.state.current().text) {
+            match format {
+                CopyAs::AsIs => "Copied to clipboard",
+                CopyAs::Plain => "Copied as plain text",
+                CopyAs::Html => "Copied as HTML",
+            }
+            .to_owned()
+        } else if self.clipboard.secret_copied(&text) {
             format!("Copied, clipboard clears in {} s", clipboard::CLEAR_AFTER.as_secs())
         } else {
             "Copied; the clipboard can't be cleared here".to_owned()
         };
         self.session.toast(now, msg, None);
+    }
+
+    /// Shows the open note rendered, or as text again.
+    pub fn toggle_rendered(&mut self) {
+        let id = self.session.state.current().id;
+        if !self.rendered.remove(&id) {
+            self.rendered.insert(id);
+        }
+        self.session.focus_editor = true;
     }
 
     // ---- encryption ---------------------------------------------------------------------------
@@ -424,6 +478,9 @@ impl App {
         }
         if ctx.input_mut(|i| i.consume_shortcut(&cmd_shift(Key::C))) {
             self.copy(ctx, now);
+        }
+        if ctx.input_mut(|i| i.consume_shortcut(&cmd_shift(Key::M))) {
+            self.toggle_rendered();
         }
         if ctx.input_mut(|i| i.consume_shortcut(&cmd_shift(Key::H))) {
             self.session.toggle_hidden(now);
@@ -796,6 +853,11 @@ impl App {
             self.unlock_view(ui, rect, t, now);
             return;
         }
+        let note = self.session.state.current();
+        if self.rendered.contains(&note.id) && !self.session.is_masked(note) {
+            self.rendered_view(ui, rect, t);
+            return;
+        }
         let font = match self.session.state.font {
             FontStyle::Sans => egui::FontId::proportional(self.session.state.font_size),
             FontStyle::Mono => egui::FontId::monospace(self.session.state.font_size - 1.0),
@@ -840,6 +902,22 @@ impl App {
         if hidden && self.session.state.current().text.is_empty() {
             ui.painter().text(Pos2::new(rect.right(), rect.top()), Align2::RIGHT_TOP, "hidden", theme::regular(11.0), t.placeholder);
         }
+    }
+
+    /// The note's Markdown drawn as formatted text, selectable but read-only.
+    fn rendered_view(&mut self, ui: &mut egui::Ui, rect: Rect, t: &Tokens) {
+        let note = self.session.state.current();
+        let blocks = markdown::blocks(&note.text);
+        let mut child = ui.new_child(egui::UiBuilder::new().max_rect(rect).layout(egui::Layout::top_down(egui::Align::Min)));
+        child.set_clip_rect(rect.intersect(ui.clip_rect()));
+        let (size, mono) = (self.session.state.font_size, self.session.state.font == FontStyle::Mono);
+        egui::ScrollArea::vertical().id_salt(("rendered", note.id)).auto_shrink(false).show(&mut child, |ui| {
+            ui.set_width(rect.width());
+            if blocks.is_empty() {
+                ui.label(egui::RichText::new("Nothing to show yet.").color(t.placeholder).font(theme::regular(size)));
+            }
+            preview::show(ui, &blocks, t, size, mono);
+        });
     }
 
     /// The note as it is saved: the SimpleTextCrypt message, selectable but read-only.
@@ -972,8 +1050,12 @@ impl App {
         }
         x += 38.0;
         let copy = Rect::from_center_size(Pos2::new(x, y), size);
-        if icon_button(ui, copy, "files", 19.0, t.icon_faint, t, "Copy").on_hover_text("Copy all (Ctrl+Shift+C)").clicked() {
+        let resp =
+            icon_button(ui, copy, "files", 19.0, t.icon_faint, t, "Copy").on_hover_text("Copy all (Ctrl+Shift+C); right-click for more");
+        if resp.clicked() {
             self.copy(ui.ctx(), now);
+        } else if resp.secondary_clicked() {
+            self.toggle_popup(Popup::Copy, copy);
         }
         x += 38.0;
         let save = Rect::from_center_size(Pos2::new(x, y), size);
@@ -996,7 +1078,7 @@ impl App {
     fn popups(&mut self, ctx: &egui::Context, window: Rect, t: &Tokens, now: f64) {
         let Some((kind, anchor)) = self.popup else { return };
         let (pos, pivot) = match kind {
-            Popup::Font | Popup::Encrypt => (anchor.left_top() - Vec2::new(0.0, 4.0), Align2::LEFT_BOTTOM),
+            Popup::Font | Popup::Copy | Popup::Encrypt => (anchor.left_top() - Vec2::new(0.0, 4.0), Align2::LEFT_BOTTOM),
             Popup::More => (anchor.right_bottom() + Vec2::new(0.0, 4.0), Align2::RIGHT_TOP),
         };
         let frame = egui::Frame::new()
@@ -1016,6 +1098,7 @@ impl App {
                     ui.spacing_mut().item_spacing.y = 1.0;
                     match kind {
                         Popup::Font => self.font_menu(ui, t, now),
+                        Popup::Copy => self.copy_menu(ui, t, now),
                         // Scrolls in a window too short for it (the minimum height is 170).
                         Popup::More => {
                             egui::ScrollArea::vertical().max_height(window.height() - 20.0).show(ui, |ui| self.more_menu(ui, t, now));
@@ -1028,6 +1111,18 @@ impl App {
             && ctx.pointer_interact_pos().is_some_and(|p| !area.response.rect.contains(p) && !anchor.contains(p));
         if clicked_outside {
             self.popup = None;
+        }
+    }
+
+    /// The copy button's right-click: the three forms a note can be copied in.
+    fn copy_menu(&mut self, ui: &mut egui::Ui, t: &Tokens, now: f64) {
+        for (label, keys, format) in
+            [("Copy as is", "Ctrl+Shift+C", CopyAs::AsIs), ("Copy without Markdown", "", CopyAs::Plain), ("Copy as HTML", "", CopyAs::Html)]
+        {
+            if menu_item(ui, t, label, keys, false).clicked() {
+                self.copy_as(ui.ctx(), now, format);
+                self.popup = None;
+            }
         }
     }
 
@@ -1133,6 +1228,11 @@ impl App {
         }
         if menu_item(ui, t, "Close note", "Ctrl+W", false).clicked() {
             self.close_note(self.session.state.active, now);
+            self.popup = None;
+        }
+        let id = self.session.state.current().id;
+        if menu_item(ui, t, "Render Markdown", "Ctrl+Shift+M", self.rendered.contains(&id)).clicked() {
+            self.toggle_rendered();
             self.popup = None;
         }
         if self.session.eye() != Eye::Visible && menu_item(ui, t, "Keep this note visible", "", false).clicked() {
