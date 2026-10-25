@@ -699,7 +699,33 @@ async function start() {
   });
   addEventListener("pagehide", () => flush());
 
-  if ("serviceWorker" in navigator && location.protocol !== "file:") navigator.serviceWorker.register("sw.js").catch(() => {});
+  if ("serviceWorker" in navigator && location.protocol !== "file:") keepUpToDate();
+}
+
+/**
+ * A new build is looked for whenever the app comes back to the front (an installed app is never
+ * "navigated to", which is the only time the browser checks by itself), and the page reloads into
+ * it once its service worker takes over: the old page would go on running the old files.
+ */
+function keepUpToDate() {
+  const sw = navigator.serviceWorker;
+  // Only a page that already had a worker is being replaced; the first install changes nothing.
+  const replacing = !!sw.controller;
+  sw.register("sw.js", { updateViaCache: "none" })
+    .then((reg) => {
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") reg.update().catch(() => {});
+      });
+    })
+    .catch(() => {});
+  let reloading = false;
+  sw.addEventListener("controllerchange", async () => {
+    if (!replacing || reloading) return;
+    reloading = true;
+    await flush();
+    // Edits that could not be saved stay on screen; the new build waits for the next start.
+    if (!dirty) location.reload();
+  });
 }
 
 start();
