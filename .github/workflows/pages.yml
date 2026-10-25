@@ -1,12 +1,15 @@
 name: Pages
 
 # Pushing a tag like v0.1.0 (`just release`) builds the web app (web/) and publishes it to GitHub
-# Pages, after its tests pass. Only tags: whoever controls the site controls the code that holds
-# the passwords, so a deploy is a release decision (README § Web app). Settings → Pages must have
-# the source "GitHub Actions", and the github-pages environment must allow v* tags.
+# Pages, after its tests pass. The web app ships on its own too: `just web-release` starts this by
+# hand on main, without a new release of the binaries. Never on a plain push: whoever controls the
+# site controls the code that holds the passwords, so a deploy is always someone's decision
+# (README § Web app). Settings → Pages must have the source "GitHub Actions", and the github-pages
+# environment must allow v* tags and the main branch.
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -20,6 +23,8 @@ env:
 
 jobs:
   build:
+    # A hand-started run publishes main only, never another branch.
+    if: github.event_name == 'push' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
