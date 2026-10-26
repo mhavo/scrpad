@@ -16,7 +16,10 @@ categories = ["gui", "text-editors"]
 [dependencies]
 egui = "0.36"
 egui_extras = { version = "0.36", default-features = false, features = ["svg"] }
-eframe = { version = "0.36", default-features = false, features = ["wgpu", "wayland", "x11", "accesskit", "links"] }
+# No "accesskit": once any program asks, the tree is rebuilt every frame and never switched off
+# on macOS (slow answers to every Accessibility client), and it would hand an open secret to
+# any program allowed to read it. README § Hiding and encryption, Accessibility.
+eframe = { version = "0.36", default-features = false, features = ["wgpu", "wayland", "x11", "links"] }
 rfd = "0.17"
 serde = { version = "1", features = ["derive"] }
 # preserve_order: hooks.json keeps the key order of the user's other hooks (src/agents.rs).
