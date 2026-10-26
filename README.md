@@ -4,6 +4,8 @@
 
 A small, frameless, floating scratchpad for the things you need to jot down for a moment: a command to remember, an IP address, an API key, today's to-do list. Notes sit in tabs and save themselves, and a secret can be hidden on screen or encrypted with a password. It is also a shared notepad between you and an AI agent: the agent writes down what it finds and what it needs from you as it works, you answer in the note when you have time, and the agent reads your answers back.
 
+It runs as a desktop window (GUI), in a terminal (TUI, `scrpad --tui`) and as a web app on the phone: <https://mhavo.github.io/scrpad/>.
+
 ![scrpad with a note open, a hidden .env note, a locked Passwords note and a note from an agent](docs/screenshot.png)
 
 **Why another notes app?**
@@ -322,6 +324,7 @@ Hiding and encryption are independent. Use both for secrets that should neither 
 - **Windows** 10 2004 and later: `SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE)`, honoured by Print Screen, the Snipping Tool, OBS and the screen sharing of Teams, Zoom and browsers.
 - **macOS**: the window's sharing type is set to none. Newer macOS versions (15 and later) may no longer honour this for apps that capture with ScreenCaptureKit.
 - **Hyprland**: the window property `no_screen_share`, which covers everything that captures through the compositor (grim, OBS, screen sharing through the desktop portal).
+- **KDE Plasma** (Wayland) and **niri**: scrpad cannot ask, but a window rule for the app id `scrpad` can keep the window out. In Plasma 6.7 and later, add a window rule (System Settings → Window Management → Window Rules) that hides it from screenshots and screen recordings; Plasma 6.6 offers this only for screen sharing, per window from the title bar menu, until the window closes. In niri, `window-rule { match app-id="^scrpad$"; block-out-from "screen-capture"; }` (`"screencast"` covers only screen sharing through the portal, not grim and other screenshot tools; niri's own screenshot UI still shows the window). Such a rule keeps the window out all the time, whatever note is open, and scrpad does not see it: the icon still says the desktop doesn't allow it.
 - **Other Linux desktops**: not possible. Wayland has no protocol for an app to ask this, and on X11 any app can read the whole screen. The icon's tooltip says so.
 
 **Accessibility.** The desktop app does not expose its contents to accessibility clients (VoiceOver, Orca, Narrator, and on macOS any program granted Accessibility access, such as BetterTouchTool, Raycast or Keyboard Maestro). Such a program could otherwise read an open secret that screen capture protection hides, and egui keeps rebuilding the full tree on every frame once anything has asked for it, which on macOS made the window slow to answer every such program (window managers among them) until restart. So screen readers do not work in the window; the terminal UI (§ Terminal) works with them as any terminal program does. The window itself, its position and size, stays reachable through the system as for any app.
