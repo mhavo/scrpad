@@ -14,7 +14,7 @@ keywords = ["notepad", "scratchpad", "egui", "encryption", "notes"]
 categories = ["gui", "text-editors"]
 
 [dependencies]
-egui = "0.36"
+egui = "0.37"
 egui_extras = { version = "0.36", default-features = false, features = ["svg"] }
 # No "accesskit": once any program asks, the tree is rebuilt every frame and never switched off
 # on macOS (slow answers to every Accessibility client), and it would hand an open secret to
