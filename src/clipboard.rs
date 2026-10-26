@@ -112,26 +112,61 @@ fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
-/// Puts HTML and its plain text on the clipboard; `set_html` is the real one.
-pub type WriteHtml = dyn FnMut(&str, &str) -> bool;
+/// Puts HTML and its plain text on the clipboard, marked secret or not; `set_html` is the real one.
+pub type WriteHtml = dyn FnMut(&str, &str, bool) -> bool;
+
+/// Puts a secret's text on the clipboard; `set_secret` is the real one.
+pub type WriteSecret = dyn FnMut(&str) -> bool;
 
 /// Puts `html` on the clipboard with `plain` as its text form, so a mail or a document takes the
 /// formatting and a terminal takes the text. False where that can't be done. A secret put here
 /// is cleared like any other: the watch compares the text form.
-pub fn set_html(html: &str, plain: &str) -> bool {
+pub fn set_html(html: &str, plain: &str, secret: bool) -> bool {
     // Without a charset some targets read the fragment as Latin-1.
     let html = format!("<meta charset=\"utf-8\">{html}");
     #[cfg(target_os = "linux")]
     if std::env::var_os("WAYLAND_DISPLAY").is_some() {
-        return wayland::set_html(&html, plain);
+        return wayland::set(&[("text/html", &html)], plain, secret);
     }
-    // One clipboard for the whole run: on X11 it serves the data for as long as it lives.
+    with_system(|clipboard| {
+        let set = clipboard.set();
+        if secret { exclude_from_history(set) } else { set }.html(html.as_str(), Some(plain)).is_ok()
+    })
+}
+
+/// Puts a secret on the clipboard marked for clipboard managers to leave out of their history:
+/// `org.nspasteboard.ConcealedType` on macOS, the history exclusion on Windows, KDE's password
+/// hint on Linux. Without the mark (egui's `copy_text`) Paste, Alfred, Raycast or Klipper keep
+/// the secret for good, long after the clear. False where that can't be done.
+pub fn set_secret(text: &str) -> bool {
+    #[cfg(target_os = "linux")]
+    if std::env::var_os("WAYLAND_DISPLAY").is_some() {
+        return wayland::set(&[], text, true);
+    }
+    with_system(|clipboard| exclude_from_history(clipboard.set()).text(text).is_ok())
+}
+
+/// One clipboard for the whole run: on X11 it serves the data for as long as it lives.
+fn with_system(write: impl FnOnce(&mut arboard::Clipboard) -> bool) -> bool {
     static SYSTEM: Mutex<Option<arboard::Clipboard>> = Mutex::new(None);
     let mut system = lock(&SYSTEM);
     if system.is_none() {
         *system = arboard::Clipboard::new().ok();
     }
-    system.as_mut().is_some_and(|clipboard| clipboard.set_html(html.as_str(), Some(plain)).is_ok())
+    system.as_mut().is_some_and(write)
+}
+
+fn exclude_from_history(set: arboard::Set<'_>) -> arboard::Set<'_> {
+    #[cfg(target_os = "macos")]
+    use arboard::SetExtApple;
+    #[cfg(target_os = "linux")]
+    use arboard::SetExtLinux;
+    #[cfg(windows)]
+    use arboard::SetExtWindows;
+    // Windows also syncs the clipboard to the user's other devices unless told not to.
+    #[cfg(windows)]
+    let set = set.exclude_from_cloud();
+    set.exclude_from_history()
 }
 
 fn system() -> Option<Box<dyn Clipboard>> {
@@ -173,16 +208,24 @@ mod wayland {
         }
     }
 
-    /// Offers both forms until something else is copied. The compositor asks the owner for the
-    /// data at paste time, so a thread serves it (forking, the library's default, is not safe in
-    /// a program with threads).
-    pub fn set_html(html: &str, plain: &str) -> bool {
+    /// The MIME type KDE's Klipper and other clipboard managers skip, with its value.
+    const SECRET_HINT: (&str, &str) = ("x-kde-passwordManagerHint", "secret");
+
+    /// Offers `plain` and the `extra` forms until something else is copied, a secret with the
+    /// hint for clipboard managers. The compositor asks the owner for the data at paste time,
+    /// so a thread serves it (forking, the library's default, is not safe in a program with
+    /// threads).
+    pub fn set(extra: &[(&str, &str)], plain: &str, secret: bool) -> bool {
         if DataControl::open().is_none() {
             return false;
         }
         let source =
             |text: &str, mime: copy::MimeType| copy::MimeSource { source: copy::Source::Bytes(text.as_bytes().into()), mime_type: mime };
-        let sources = vec![source(html, copy::MimeType::Specific("text/html".into())), source(plain, copy::MimeType::Text)];
+        let mut sources: Vec<_> = extra.iter().map(|(mime, text)| source(text, copy::MimeType::Specific((*mime).into()))).collect();
+        sources.push(source(plain, copy::MimeType::Text));
+        if secret {
+            sources.push(source(SECRET_HINT.1, copy::MimeType::Specific(SECRET_HINT.0.into())));
+        }
         std::thread::spawn(move || {
             let mut options = copy::Options::new();
             options.foreground(true);

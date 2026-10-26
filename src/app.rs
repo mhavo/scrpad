@@ -96,6 +96,8 @@ pub struct App {
     pub clipboard: clipboard::Watch,
     /// Puts HTML and its plain text on the clipboard; tests swap it for one in memory.
     pub write_html: Box<clipboard::WriteHtml>,
+    /// Puts a secret on the clipboard for clipboard managers to skip; tests swap it too.
+    pub write_secret: Box<clipboard::WriteSecret>,
     /// The notes shown rendered (Markdown) instead of as text. Not saved: a note opens as text.
     rendered: std::collections::HashSet<u64>,
 }
@@ -226,6 +228,7 @@ impl App {
             wm: None,
             clipboard: clipboard::Watch::system(),
             write_html: Box::new(clipboard::set_html),
+            write_secret: Box::new(clipboard::set_secret),
             rendered: Default::default(),
         }
     }
@@ -373,7 +376,10 @@ impl App {
             return;
         }
         let copied = match format {
-            CopyAs::Html => (self.write_html)(&markdown::html(&source), &text),
+            CopyAs::Html => (self.write_html)(&markdown::html(&source), &text, secret),
+            // Where the marked copy can't be made (Wayland without data-control), egui's
+            // unmarked one: as before, rather than no copy at all.
+            CopyAs::AsIs | CopyAs::Plain if secret && (self.write_secret)(&text) => true,
             CopyAs::AsIs | CopyAs::Plain => {
                 ctx.copy_text(text.clone());
                 true
@@ -891,6 +897,13 @@ impl App {
                 edit = edit.layouter(&mut mask);
             }
             let resp = edit.show(ui).response;
+            if hidden {
+                // egui gives the accessibility tree the real text; the dots instead. The app is
+                // built without the tree (Cargo.toml), so this holds wherever the tree is on.
+                let dots: String = note.text.chars().map(|c| if c == '\n' { '\n' } else { '•' }).collect();
+                resp.widget_info(|| egui::WidgetInfo::text_edit(true, dots.clone(), dots.clone(), ""));
+                ui.ctx().accesskit_node_builder(resp.id, |node| node.set_role(egui::accesskit::Role::MultilineTextInput));
+            }
             if focus {
                 resp.request_focus();
             }

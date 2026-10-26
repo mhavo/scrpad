@@ -522,6 +522,19 @@ impl scrpad::clipboard::Clipboard for FakeClipboard {
 }
 
 #[test]
+fn a_hidden_note_shows_only_dots_to_accessibility_clients_too() {
+    let _guard = ui_test_guard();
+    let mut state = sample();
+    state.notes[1].text = "sk-live-SECRET\nline two".into();
+    state.notes[1].hidden = true;
+    let h = harness(state);
+    let editor = h.get_by_role(egui::accesskit::Role::MultilineTextInput);
+    let value = editor.value().unwrap_or_default();
+    assert!(!value.contains("SECRET") && !value.contains("line"), "the editor's value gives the text away: {value:?}");
+    assert_eq!(value, "••••••••••••••\n••••••••");
+}
+
+#[test]
 fn copying_a_hidden_note_clears_the_clipboard_later_if_unchanged() {
     let _guard = ui_test_guard();
     let mut state = sample();
@@ -534,10 +547,15 @@ fn copying_a_hidden_note_clears_the_clipboard_later_if_unchanged() {
         std::sync::Arc::new(move || Some(Box::new(fake.clone()) as Box<dyn scrpad::clipboard::Clipboard>))
     };
     h.state_mut().clipboard = scrpad::clipboard::Watch::new(open, std::time::Duration::from_millis(100));
+    // A secret goes past egui to a writer that marks it for clipboard managers to skip.
+    let sink = fake.clone();
+    h.state_mut().write_secret = Box::new(move |text| {
+        *sink.0.lock().unwrap() = Some(text.to_owned());
+        true
+    });
     h.get_by_label("Copy").click();
     h.run_steps(2);
-    // What egui put on the system clipboard, put on the fake one.
-    *fake.0.lock().unwrap() = Some("sk-live-SECRET".into());
+    assert_eq!(fake.0.lock().unwrap().as_deref(), Some("sk-live-SECRET"));
     h.get_by_label("Copied, clipboard clears in 30 s");
     assert!(h.state().clipboard.is_pending());
     for _ in 0..100 {
@@ -1095,7 +1113,8 @@ fn the_menu_copies_as_html_with_the_text_beside_it() {
     let mut h = harness(markdown_note());
     let seen = std::sync::Arc::new(Mutex::new(None));
     let sink = seen.clone();
-    h.state_mut().write_html = Box::new(move |html, plain| {
+    h.state_mut().write_html = Box::new(move |html, plain, secret| {
+        assert!(!secret, "a plain note is not marked secret");
         *sink.lock().unwrap() = Some((html.to_owned(), plain.to_owned()));
         true
     });
@@ -1131,7 +1150,8 @@ fn a_secret_copied_as_html_is_cleared_like_any_other_copy() {
     h.state_mut().clipboard = scrpad::clipboard::Watch::new(open, std::time::Duration::from_millis(100));
     let sink = fake.clone();
     // The text form is what a reader of the clipboard sees, and what the watch compares.
-    h.state_mut().write_html = Box::new(move |_, plain| {
+    h.state_mut().write_html = Box::new(move |_, plain, secret| {
+        assert!(secret, "clipboard managers are told to skip a secret");
         *sink.0.lock().unwrap() = Some(plain.to_owned());
         true
     });
