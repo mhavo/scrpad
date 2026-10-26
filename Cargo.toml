@@ -104,7 +104,7 @@ path = "src/bin/scrpad-console.rs"
 required-features = ["console"]
 
 [dev-dependencies]
-egui_kittest = { version = "0.36", features = ["eframe", "wgpu"] }
+egui_kittest = { version = "0.37", features = ["eframe", "wgpu"] }
 
 # Everyday release builds: without LTO only the changed crate is rebuilt (seconds, not minutes).
 [profile.release]
