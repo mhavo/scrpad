@@ -4,6 +4,8 @@
 
 A small, frameless, floating scratchpad for the things you need to jot down for a moment: a command to remember, an IP address, an API key, today's to-do list. Notes sit in tabs and save themselves, and a secret can be hidden on screen or encrypted with a password. It is also a shared notepad between you and an AI agent: the agent writes down what it finds and what it needs from you as it works, you answer in the note when you have time, and the agent reads your answers back.
 
+It runs as a desktop window (GUI), in a terminal (TUI, `scrpad --tui`) and as a web app on the phone: <https://mhavo.github.io/scrpad/>.
+
 ![scrpad with a note open, a hidden .env note, a locked Passwords note and a note from an agent](docs/screenshot.png)
 
 **Why another notes app?**
@@ -292,11 +294,8 @@ Hiding and encryption are independent. Use both for secrets that should neither 
 - **Windows** 10 2004 and later: `SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE)`, honoured by Print Screen, the Snipping Tool, OBS and the screen sharing of Teams, Zoom and browsers.
 - **macOS**: the window's sharing type is set to none. Newer macOS versions (15 and later) may no longer honour this for apps that capture with ScreenCaptureKit.
 - **Hyprland**: the window property `no_screen_share`, which covers everything that captures through the compositor (grim, OBS, screen sharing through the desktop portal).
-- **KDE Plasma**: Plasma 6.6 supports excluding windows from screencasts; 6.7 adds screenshots and persistent window rules. Users can configure exclusion for scrpad, but automatic integration is not yet implemented.
-- **niri**: supports excluding windows through its `block-out-from` window rule. Users can configure this for scrpad; automatic integration is not yet implemented.
-- **Other Linux desktops**: Wayland has no widely supported protocol for apps to request capture exclusion, but individual compositors may support it through their own mechanisms. X11 has no reliable equivalent and any app can read the whole screen. The icon's tooltip indicates when scrpad cannot enable protection.
-
-Support for additional Wayland compositors may be added.
+- **KDE Plasma** (Wayland) and **niri**: scrpad cannot ask, but a window rule for the app id `scrpad` can keep the window out. In Plasma 6.7 and later, add a window rule (System Settings → Window Management → Window Rules) that hides it from screenshots and screen recordings; Plasma 6.6 offers this only for screen sharing, per window from the title bar menu, until the window closes. In niri, `window-rule { match app-id="^scrpad$"; block-out-from "screen-capture"; }` (`"screencast"` covers only screen sharing through the portal, not grim and other screenshot tools; niri's own screenshot UI still shows the window). Such a rule keeps the window out all the time, whatever note is open, and scrpad does not see it: the icon still says the desktop doesn't allow it.
+- **Other Linux desktops**: not possible. Wayland has no protocol for an app to ask this, and on X11 any app can read the whole screen. The icon's tooltip says so.
 
 This keeps notes out of a careless share or recording. It is not protection against someone set on capturing the screen: a phone camera, a capture card or software running with enough privileges sees the window as it is.
 
